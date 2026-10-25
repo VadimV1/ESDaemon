@@ -1,0 +1,95 @@
+#!/bin/bash
+# esdaemon — ESDaemon control command, installed on PATH at /usr/local/bin/esdaemon.
+# Everything you do to a running ESDaemon goes through here; nothing else needs to stay on disk.
+#   esdaemon status                 is it running, which version, where is the config
+#   esdaemon reload                 apply config edits (regenerate + restart the daemons)   [root]
+#   esdaemon update [--install]     check for / install the latest GitHub release
+#   esdaemon logs                   stream ESDaemon's records from the unified log
+#   esdaemon config                 print the config file path
+#   esdaemon version                print the installed version
+#   esdaemon uninstall [--purge]    remove ESDaemon completely, this command included        [root]
+#                                     --purge also deletes /var/log/ESDaemon (saved config + stderr)
+# Records already written stay in the unified log until macOS rotates them out.
+set -uo pipefail
+
+# Paths the installer uses. Overridable so the tests can exercise uninstall against a throwaway tree.
+BASE="${ESDAEMON_BASE:-/usr/local/ESDaemon}"
+LD="${ESDAEMON_LD:-/Library/LaunchDaemons}"
+LOGS="${ESDAEMON_LOGS:-/var/log/ESDaemon}"
+SELF="${ESDAEMON_SELF:-/usr/local/bin/esdaemon}"
+LAUNCHCTL="${ESDAEMON_LAUNCHCTL:-launchctl}"
+LOGBIN="${ESDAEMON_LOG:-/usr/bin/log}"
+
+# Real actions on the real install require root. A test pointed at a throwaway BASE does not.
+need_root() {
+  [ "$BASE" != /usr/local/ESDaemon ] && return 0
+  [ "$(id -u)" = 0 ] || { echo "run as root: sudo esdaemon $1" >&2; exit 1; }
+}
+die() { echo "esdaemon: $*" >&2; exit 1; }
+
+cmd="${1:-status}"; [ $# -gt 0 ] && shift
+
+case "$cmd" in
+  status)
+    for j in eslogger filter; do
+      if "$LAUNCHCTL" print "system/com.esdaemon.$j" >/dev/null 2>&1; then
+        st="$("$LAUNCHCTL" print "system/com.esdaemon.$j" 2>/dev/null | awk -F'= ' '/^[[:space:]]*state =/{print $2; exit}')"
+        echo "com.esdaemon.$j   ${st:-running}"
+      else
+        echo "com.esdaemon.$j   not loaded"
+      fi
+    done
+    echo "version          $(tr -d ' \r\n' < "$BASE/VERSION" 2>/dev/null || echo 'not installed')"
+    echo "config           $BASE/configs/ESDaemon.cfg"
+    ;;
+
+  reload)
+    need_root reload
+    [ -x "$BASE/reload.sh" ] || die "not installed ($BASE/reload.sh missing)"
+    exec "$BASE/reload.sh" "$@"
+    ;;
+
+  update)
+    [ -x "$BASE/update.sh" ] || die "not installed ($BASE/update.sh missing)"
+    exec "$BASE/update.sh" "$@"
+    ;;
+
+  logs)
+    exec "$LOGBIN" stream --info --predicate 'subsystem == "com.apple.eslogger" AND process == "ESDaemon"'
+    ;;
+
+  config)
+    echo "$BASE/configs/ESDaemon.cfg"
+    ;;
+
+  version)
+    tr -d ' \r\n' < "$BASE/VERSION" 2>/dev/null && echo || die "not installed"
+    ;;
+
+  uninstall)
+    need_root uninstall
+    purge=0; [ "${1:-}" = --purge ] && purge=1
+    for j in filter eslogger; do
+      "$LAUNCHCTL" bootout "system/com.esdaemon.$j" 2>/dev/null && echo "stopped com.esdaemon.$j"
+      rm -f "$LD/com.esdaemon.$j.plist"
+    done
+    if [ $purge = 0 ] && [ -f "$BASE/configs/ESDaemon.cfg" ]; then
+      [ -d "$LOGS" ] || install -d -m 700 "$LOGS" 2>/dev/null || mkdir -p "$LOGS"
+      cp "$BASE/configs/ESDaemon.cfg" "$LOGS/ESDaemon.cfg.uninstalled" \
+        && echo "config saved to $LOGS/ESDaemon.cfg.uninstalled"
+    fi
+    rm -rf "$BASE" /var/run/ESDaemon
+    [ $purge = 1 ] && rm -rf "$LOGS" && echo "removed $LOGS"
+    # remove this command last — bash has already read the script, so deleting it mid-run is safe
+    rm -f "$SELF" && echo "removed $SELF"
+    echo "ESDaemon removed. Revoke Full Disk Access for /usr/bin/eslogger in System Settings, or remove the MDM profile, if you no longer need it."
+    ;;
+
+  -h|--help|help)
+    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+
+  *)
+    echo "esdaemon: unknown command '$cmd' (try: esdaemon help)" >&2; exit 2
+    ;;
+esac

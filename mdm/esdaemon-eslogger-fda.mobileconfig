@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ESDaemon: grant Full Disk Access to /usr/bin/eslogger (Apple's Endpoint Security logger).
+  PPPC profiles only take effect when delivered by an MDM (user-approved or ADE enrolment); installing this
+  file by hand does nothing for TCC. Only eslogger needs the grant: ESDaemon's filter never reads protected files.
+  Before deploying, replace the two PayloadUUID values with your own (uuidgen) and set PayloadOrganization.
+-->
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadType</key><string>com.apple.TCC.configuration-profile-policy</string>
+      <key>PayloadIdentifier</key><string>com.esdaemon.pppc.eslogger</string>
+      <key>PayloadUUID</key><string>6B1E5D2A-7C3F-4E8B-9A10-3D2F5C7E9B41</string>
+      <key>PayloadVersion</key><integer>1</integer>
+      <key>PayloadDisplayName</key><string>ESDaemon: eslogger Full Disk Access</string>
+      <key>Services</key>
+      <dict>
+        <key>SystemPolicyAllFiles</key>
+        <array>
+          <dict>
+            <key>Identifier</key><string>/usr/bin/eslogger</string>
+            <key>IdentifierType</key><string>path</string>
+            <key>CodeRequirement</key><string>identifier "com.apple.eslogger" and anchor apple</string>
+            <key>StaticCode</key><false/>
+            <key>Authorization</key><string>Allow</string>
+            <key>Comment</key><string>ESDaemon reads Endpoint Security events through eslogger</string>
+          </dict>
+        </array>
+      </dict>
+    </dict>
+  </array>
+  <key>PayloadDisplayName</key><string>ESDaemon eslogger permission</string>
+  <key>PayloadDescription</key><string>Allows /usr/bin/eslogger to receive Endpoint Security events for ESDaemon.</string>
+  <key>PayloadIdentifier</key><string>com.esdaemon.pppc</string>
+  <key>PayloadOrganization</key><string>ESDaemon</string>
+  <key>PayloadScope</key><string>System</string>
+  <key>PayloadType</key><string>Configuration</string>
+  <key>PayloadUUID</key><string>2F8C4A91-5E6D-4B7A-8C32-1E9D0F4B6A57</string>
+  <key>PayloadVersion</key><integer>1</integer>
+</dict>
+</plist>

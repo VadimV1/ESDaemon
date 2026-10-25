@@ -1,5 +1,6 @@
 #!/bin/bash
-# run-tests.sh — keep/drop matrix for scope.jq against synthetic events in eslogger's exec JSON shape.
+# run-tests.sh — log-all matrix for scope.jq against synthetic events in eslogger's exec JSON shape:
+# every exec is kept unless an [exclude] rule of the fixture matches (Bindplane agent, Chrome's Team ID).
 # Shape follows Apple's own man-page jq example (.process.executable.path, .event.exec.target.executable.path).
 # SYNTHETIC — re-run against a real capture from measure.sh before trusting field paths.
 set -uo pipefail
@@ -9,7 +10,7 @@ pass=0; fail=0
 # ev <parent_path> <parent_platform> <parent_team> <target_path> <target_platform> <target_team> <args-json>
 ev() { jq -cn --arg pp "$1" --argjson pplat "$2" --arg pt "$3" --arg tp "$4" --argjson tplat "$5" --arg tt "$6" --argjson args "$7" '
   def proc($p;$plat;$team): {executable:{path:$p, stat:{st_size:1234, st_birthtimespec:"2026-09-28T10:00:00Z"}},
-     audit_token:{pid:4242, euid:501, ruid:501}, ppid:1, original_ppid:1, is_platform_binary:$plat,
+     audit_token:{pid:4242, euid:501, ruid:501}, ppid:4000, original_ppid:4000, is_platform_binary:$plat,
      team_id:(if $team=="" then null else $team end), signing_id:"x", cdhash:"ab", codesigning_flags:570522385};
   {schema_version:1, mach_time:1, event_type:9, time:"2026-09-28T10:00:00Z", seq_num:1, global_seq_num:1,
    thread:{thread_id:1}, process:proc($pp;$pplat;$pt),
@@ -21,7 +22,7 @@ t() { local want="$1" name="$2"; shift 2
   if [ "$g" = "$want" ]; then pass=$((pass+1)); printf "  ok   %-4s %s\n" "$g" "$name"
   else fail=$((fail+1)); printf "  FAIL want %s got %s  %s\n" "$want" "$g" "$name"; fi; }
 L=/sbin/launchd; T=/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal
-echo "-- curated / LOOBins signal must survive"
+echo "-- attacker activity is logged"
 t KEEP "curl download to tmp"            /bin/zsh true "" /usr/bin/curl true "" '["curl","-o","/tmp/a","https://x/y/z"]'
 t KEEP "osascript base64"                /bin/zsh true "" /usr/bin/osascript true "" '["osascript","-e","run script (do shell script \"echo aGk= | base64 -D\")"]'
 t KEEP "osascript -> sh (parent rule)"   /usr/bin/osascript true "" /bin/sh true "" '["sh","-c","ls"]'
@@ -43,26 +44,26 @@ t KEEP "DMG process spawns curl"         /Volumes/X/X.app/Contents/MacOS/X false
 t KEEP "hidden App Support dir"          /sbin/launchd true "" "/Users/a/Library/Application Support/.x/agent" false "ABCDE12345" '["agent"]'
 t KEEP "unsigned parent spawns ls"       /Users/a/Downloads/tool false "" /bin/ls true "" '["ls"]'
 t KEEP "3rd-party unknown team"          /sbin/launchd true "" /Applications/Foo.app/Contents/MacOS/Foo false "ZZZZ999999" '["Foo"]'
-echo "-- OS noise must be dropped"
-t DROP "benign sh -c from launchd"       /sbin/launchd true "" /bin/sh true "" '["sh","-c","/usr/libexec/periodic-wrapper daily"]'
-t DROP "zsh -c git status (IDE)"         /Applications/Code.app/Contents/MacOS/Electron false "UBF8T346G9" /bin/zsh true "" '["zsh","-c","git status"]'
-t DROP "defaults read (plain)"           /bin/zsh true "" /usr/bin/defaults true "" '["defaults","read","com.apple.dock"]'
-t DROP "sw_vers from installer"          /bin/sh true "" /usr/bin/sw_vers true "" '["sw_vers","-productVersion"]'
-t DROP "mdworker (not listed)"           /sbin/launchd true "" /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared true "" '["mdworker_shared"]'
-t DROP "xpcproxy (not listed)"           /sbin/launchd true "" /usr/libexec/xpcproxy true "" '["xpcproxy"]'
-t DROP "Chrome helper (noisy team)"      /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome false "EQHXZ8M8AV" "/Applications/Google Chrome.app/Contents/Frameworks/Helper" false "EQHXZ8M8AV" '["Helper"]'
-t DROP "Bindplane log stream (self)"     /opt/observiq-otel-collector/observiq-otel-collector false "X" /usr/bin/log true "" '["log","stream"]'
-t DROP "ps -ax plain"                     /bin/zsh true "" /bin/ps true "" '["ps","-ax"]'
-t DROP "cat of a normal file"            /bin/zsh true "" /bin/cat true "" '["cat","README.md"]'
-echo "-- download-capable Apple binaries + in-language downloads"
+echo "-- ordinary OS activity is logged too (log all), only [exclude] matches are dropped"
+t KEEP "benign sh -c from launchd"       /sbin/launchd true "" /bin/sh true "" '["sh","-c","/usr/libexec/periodic-wrapper daily"]'
+t KEEP "zsh -c git status (IDE)"         /Applications/Code.app/Contents/MacOS/Electron false "UBF8T346G9" /bin/zsh true "" '["zsh","-c","git status"]'
+t KEEP "defaults read (plain)"           /bin/zsh true "" /usr/bin/defaults true "" '["defaults","read","com.apple.dock"]'
+t KEEP "sw_vers from installer"          /bin/sh true "" /usr/bin/sw_vers true "" '["sw_vers","-productVersion"]'
+t KEEP "mdworker"           /sbin/launchd true "" /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared true "" '["mdworker_shared"]'
+t KEEP "xpcproxy"           /sbin/launchd true "" /usr/libexec/xpcproxy true "" '["xpcproxy"]'
+t DROP "Chrome helper ([exclude] TeamId)"      /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome false "EQHXZ8M8AV" "/Applications/Google Chrome.app/Contents/Frameworks/Helper" false "EQHXZ8M8AV" '["Helper"]'
+t DROP "Bindplane log stream ([exclude] ParentImage)"     /opt/observiq-otel-collector/observiq-otel-collector false "X" /usr/bin/log true "" '["log","stream"]'
+t KEEP "ps -ax plain"                     /bin/zsh true "" /bin/ps true "" '["ps","-ax"]'
+t KEEP "cat of a normal file"            /bin/zsh true "" /bin/cat true "" '["cat","README.md"]'
+echo "-- downloads"
 t KEEP "rsync (download list)"           /bin/zsh true "" /usr/bin/rsync true "" '["rsync","-a","host:/x","."]'
 t KEEP "nscurl"                          /bin/zsh true "" /usr/bin/nscurl true "" '["nscurl","https://a"]'
 t KEEP "mount_smbfs"                     /bin/zsh true "" /sbin/mount_smbfs true "" '["mount_smbfs","//u@h/s","/tmp/m"]'
 t KEEP "git clone"                       /bin/zsh true "" /usr/bin/git true "" '["git","clone","https://x"]'
 t KEEP "python -c urlretrieve one-liner"   /bin/zsh true "" /usr/bin/python3 true "" '["python3","-c","import urllib.request as u;u.urlretrieve(x)"]'
 t KEEP "ruby open-uri"                   /bin/zsh true "" /usr/bin/ruby true "" '["ruby","-ropen-uri","-e","URI.open(x)"]'
-t DROP "python3 script.py (LIMIT: download inside script invisible at exec)" /bin/zsh true "" /usr/bin/python3 true "" '["python3","script.py"]'
-echo "-- vendor allowlist must NOT blind children"
+t KEEP "python3 script.py" /bin/zsh true "" /usr/bin/python3 true "" '["python3","script.py"]'
+echo "-- excluding a vendor's binaries must NOT blind their children"
 t KEEP "Chrome spawns curl to /tmp"      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" false "EQHXZ8M8AV" /usr/bin/curl true "" '["curl","-o","/tmp/x","http://a"]'
 echo "-- slimming"
 out=$(ev /bin/zsh true "" /usr/bin/curl true "" '["curl","http://a"]' | jq -n -cR --argjson cfg "$CFG" -f "$ROOT/src/scope.jq")
