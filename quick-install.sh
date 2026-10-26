@@ -54,7 +54,7 @@ fi
 
 # 3. install (validates the config first; nothing changes if it is invalid)
 say "installing to /usr/local/ESDaemon"
-"$SRC/install.sh"
+bash "$SRC/install.sh"   # bash-invoked: a GitHub tarball/ZIP (or a Windows push) may drop the execute bit
 
 # 4. check: is eslogger allowed to run, and do events arrive?
 sleep 3

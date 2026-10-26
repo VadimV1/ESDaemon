@@ -5,9 +5,10 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; BASE=/usr/local/ESDaemon; RUN="$BASE/run"; FIFO="$RUN/raw.fifo"; LD=/Library/LaunchDaemons
 CFGF="$BASE/configs/ESDaemon.cfg"; RENDER=""
 if [ "${1:-}" = --render ]; then RENDER="${2:?output dir}"; CFGF="${3:-$CFGF}"; fi
-"$HERE/cfg.sh" "$CFGF" json >/dev/null || { echo "ESDaemon.cfg is invalid, nothing changed"; exit 1; }
-EVENTS="$("$HERE/cfg.sh" "$CFGF" events)"; [ -n "$EVENTS" ] || EVENTS=exec
-SUB="$("$HERE/cfg.sh" "$CFGF" get subsystem)"; CAT="$("$HERE/cfg.sh" "$CFGF" get category)"
+# bash-invoked: a GitHub tarball/ZIP (or a Windows push) may drop the execute bit on cfg.sh
+bash "$HERE/cfg.sh" "$CFGF" json >/dev/null || { echo "ESDaemon.cfg is invalid, nothing changed"; exit 1; }
+EVENTS="$(bash "$HERE/cfg.sh" "$CFGF" events)"; [ -n "$EVENTS" ] || EVENTS=exec
+SUB="$(bash "$HERE/cfg.sh" "$CFGF" get subsystem)"; CAT="$(bash "$HERE/cfg.sh" "$CFGF" get category)"
 
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 ARGS=""; for e in $EVENTS; do ARGS+="<string>$e</string>"; done

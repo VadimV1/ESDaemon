@@ -10,11 +10,12 @@ CFGF="$BASE/configs/ESDaemon.cfg"; [ -f "$CFGF" ] || CFGF="$SRC/configs/ESDaemon
 # an older cfg (keep rules, or events = instead of [modules]) is migrated once; the original is kept as ESDaemon.cfg.v1
 MIG=""
 if [ "$CFGF" = "$BASE/configs/ESDaemon.cfg" ] && grep -Eq '^[[:space:]]*(\[(always|download|conditional|noisy_team_ids|noisy_path_prefixes)\]|(third_party|events)[[:space:]]*=)' "$CFGF"; then
-  MIG="$(mktemp)"; "$SRC/bin/migrate-cfg.sh" "$CFGF" > "$MIG"
-  "$SRC/bin/cfg.sh" "$MIG" json >/dev/null || { echo "could not migrate $CFGF (migrated draft: $MIG); fix it and re-run install.sh (nothing changed)"; exit 1; }
+  MIG="$(mktemp)"; bash "$SRC/bin/migrate-cfg.sh" "$CFGF" > "$MIG"
+  bash "$SRC/bin/cfg.sh" "$MIG" json >/dev/null || { echo "could not migrate $CFGF (migrated draft: $MIG); fix it and re-run install.sh (nothing changed)"; exit 1; }
   CFGF="$MIG"
 fi
-"$SRC/bin/cfg.sh" "$CFGF" json >/dev/null || { echo "$CFGF is invalid for this version: fix it and re-run install.sh (nothing changed)"; exit 1; }
+# bash-invoked: a GitHub tarball/ZIP (or a Windows push) may drop the execute bit on the source scripts
+bash "$SRC/bin/cfg.sh" "$CFGF" json >/dev/null || { echo "$CFGF is invalid for this version: fix it and re-run install.sh (nothing changed)"; exit 1; }
 
 # retire the old unfiltered daemon, it would flood the same subsystem
 if [ -f $LD/com.endpoint.eslogger.plist ]; then launchctl bootout system $LD/com.endpoint.eslogger.plist 2>/dev/null || true; mv $LD/com.endpoint.eslogger.plist $LD/com.endpoint.eslogger.plist.disabled; fi

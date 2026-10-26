@@ -50,5 +50,5 @@ if [ "${1:-}" != --install ]; then echo "install it with: sudo $HERE/update.sh -
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 curl -fsSL "https://codeload.github.com/$REPO/tar.gz/$TAG" | tar -xz -C "$WORK" || die "download of $TAG failed"
 SRC="$(find "$WORK" -mindepth 1 -maxdepth 1 -type d | head -1)"
-ESDAEMON_REPO="$REPO" ESDAEMON_REF="$TAG" "$SRC/quick-install.sh"
+ESDAEMON_REPO="$REPO" ESDAEMON_REF="$TAG" bash "$SRC/quick-install.sh"
 echo "ESDaemon updated: $INSTALLED -> $(tr -d ' \r\n' < /usr/local/ESDaemon/VERSION)"

@@ -2,6 +2,7 @@
 SHELL_FILES := install.sh uninstall.sh quick-install.sh bin/esdaemon bin/*.sh test/*.sh redteam/*.sh
 
 test:            ## filter logic tests (needs jq) — runs on Linux or macOS
+	@chmod +x bin/*.sh bin/esdaemon test/*.sh 2>/dev/null || true   # a bit-stripped checkout (ZIP/Windows push) still runs
 	@for t in test/*-tests.sh; do printf "== %-24s " $$t; out=$$(bash $$t 2>&1) && echo "$$out" | tail -1 || { echo "$$out"; exit 1; }; done
 
 lint:            ## shell syntax + shellcheck (if installed) + cfg parses
