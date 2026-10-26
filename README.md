@@ -6,7 +6,7 @@
 
 <p align="center"><b>macOS endpoint telemetry for your SIEM, built on Apple's own <code>eslogger</code>.</b></p>
 
-ESDaemon turns Endpoint Security events (process starts, file creates and deletes, logins, and more) into compact Sysmon-style JSON in the macOS unified log, filtered by a config you control. Any log collector that reads the unified log, such as the Bindplane / OpenTelemetry macOS receiver, ships them to your SIEM.
+ESDaemon turns Endpoint Security events (process starts and logins today; file events and more are on the roadmap) into compact Sysmon-style JSON in the macOS unified log, filtered by a config you control. Any log collector that reads the unified log, such as the Bindplane / OpenTelemetry macOS receiver, ships them to your SIEM.
 
 No kernel extension, no Apple entitlement, no agent to license: it runs `/usr/bin/eslogger`, which ships with macOS.
 
@@ -17,7 +17,7 @@ No kernel extension, no Apple entitlement, no agent to license: it runs `/usr/bi
 
 ## What it enables
 
-- **Mac visibility in the SIEM you already have.** Who logged in (with source IP for SSH), what ran (full command line, parent, user, code signature), and which files were created or deleted, in Sysmon field names (`EventID`, `Image`, `CommandLine`, `ParentImage`, `User`, `TargetFilename` …) that existing Windows/Sysmon detections and analysts already know.
+- **Mac visibility in the SIEM you already have.** Who logged in (with source IP for SSH) and what ran (full command line, parent, user, code signature), in Sysmon field names (`EventID`, `Image`, `CommandLine`, `ParentImage`, `User` …) that existing Windows/Sysmon detections and analysts already know. (File events use `TargetFilename` and the same scheme, once that feed ships.)
 - **Proof it catches attacks.** A bundled adversary-emulation harness (`redteam/`) runs benign, self-cleaning stand-ins for real macOS techniques (LOOBins, MITRE ATT&CK) and reports which ones ESDaemon logged.
 - **Investigations on macOS.** Process trees (`ProcessGuid` / `ParentProcessGuid`), persistence (LaunchAgents and login items), quarantine removal, account changes, SSH logins and failures, all searchable.
 - **Control over volume.** Raw `eslogger` output is several GB per Mac per day. ESDaemon logs only the event types you choose and drops what you exclude, with Sysmon's include/exclude rules. The default config drops Apple's own housekeeping: an idle Mac goes from about 95 records per 10 minutes to about 13.
@@ -73,9 +73,8 @@ sudo esdaemon uninstall      # remove ESDaemon completely, the command itself in
 Everything lives in `/usr/local/ESDaemon/configs/ESDaemon.cfg`. Edit, then `sudo /usr/local/ESDaemon/reload.sh`.
 
 ```ini
-[modules]                 # what to log
+[modules]                 # what to log (supported feeds: process + user — see note below)
 process = start
-file = create, delete
 user = login
 
 [include]                 # empty = everything the modules log
@@ -91,6 +90,8 @@ TeamId is any UBF8T346G9;EQHXZ8M8AV
 | `file` | `read`, `write`, `create`, `delete`, `rename`, `attributes` |
 | `user` | `login`, `logout`, `sudo`, `account` |
 | `system` | `persistence`, `malware`, `kernel`, `mount` |
+
+> **Supported feeds for now:** ESDaemon ships and validates the **process** (`exec`) and **user** (`login`) feeds — the default config enables exactly those. The `file` and `system` modules are recognised by the config DSL but their feeds are **not developed yet**; treat them as experimental and unsupported for now.
 
 - **What the default config logs and drops, and why: [docs/DEFAULT-CONFIG.md](docs/DEFAULT-CONFIG.md)**
 - **Every setting, rule field and condition: [docs/CONFIG.md](docs/CONFIG.md)**

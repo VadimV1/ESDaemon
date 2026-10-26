@@ -1,24 +1,23 @@
 # What the default config logs and drops
 
-The shipped config ([`configs/ESDaemon.cfg`](../configs/ESDaemon.cfg)) logs **who logged in, what ran, and which files were created or deleted**, and drops only collector self-noise and Apple's own housekeeping. On an idle macOS 26 Mac that is about 13 records per 10 minutes instead of about 95, with nothing an investigation uses removed.
+The shipped config ([`configs/ESDaemon.cfg`](../configs/ESDaemon.cfg)) logs **who logged in and what ran**, and drops only collector self-noise and Apple's own housekeeping. The `file` and `system` feeds are **not developed yet** (see the note under *What it logs*).
+
+> The volume figures in this document (≈13 records per 10 minutes idle instead of ≈95, and the post-boot numbers below) were measured with an earlier default that also enabled the `file` create/delete feed. With only the `process` and `user` feeds on, idle volume is lower still; a refreshed measurement is pending. Many of the exclude rules below target file events and lie dormant while the file feed is off.
 
 ## What it logs
 
 ```ini
 [modules]
 process = start
-file = create, delete
 user = login
 ```
 
 | Module | Record (`EventType`, `EventID`) | What you get |
 |---|---|---|
 | `process = start` | `ProcessStart` (1) | every program launched: `Image`, `CommandLine`, `CurrentDirectory`, `User`, `ParentImage`, `ParentCommandLine`, `ProcessGuid` / `ParentProcessGuid`, code signing (`SigningId`, `TeamId`, `IsPlatformBinary`, `CDHash`) |
-| `file = create` | `FileCreate` (11) | every new file: `TargetFilename`, and the process that created it |
-| `file = delete` | `FileDelete` (23) | every deleted file: `TargetFilename`, and the process that deleted it |
 | `user = login` | `UserLogin` (111) | console, SSH, screen sharing and screen-unlock logins, plus authentication attempts; `Detail` carries `username`, `success`, and for SSH the `source_address` |
 
-Not on by default: file reads and writes (very frequent), process exit and injection, account changes, persistence, XProtect, kernel extensions and mounts. Add them under `[modules]` ([CONFIG.md](CONFIG.md#what-to-log-modules)).
+**Supported feeds for now: `process` and `user` only.** The `file` and `system` modules are recognised by the config DSL but their feeds are not developed yet — experimental and unsupported for now. Also not on by default: process exit and injection, and (within the undeveloped modules) file create/delete/read/write/rename, account changes, persistence, XProtect, kernel extensions and mounts. See [CONFIG.md](CONFIG.md#what-to-log-modules).
 
 ## What it drops, and why that is safe
 

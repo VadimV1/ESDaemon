@@ -22,7 +22,7 @@ ok "default cfg still parses"                     '"$ROOT/bin/cfg.sh" "$ROOT/con
 echo "-- reload.sh --render"
 mkdir -p "$T/ld" "$T/bad"
 ok "renders both plists from the default cfg"     '"$ROOT/bin/reload.sh" --render "$T/ld" "$ROOT/configs/ESDaemon.cfg" >/dev/null 2>&1 && [ -f "$T/ld/com.esdaemon.eslogger.plist" ] && [ -f "$T/ld/com.esdaemon.filter.plist" ]'
-ok "eslogger args from the default [modules] (process start, file create/delete, user login)" 'grep -q "<string>/usr/bin/eslogger</string><string>exec</string><string>create</string><string>unlink</string><string>authentication</string>" "$T/ld/com.esdaemon.eslogger.plist"'
+ok "eslogger args from the default [modules] (process start, user login)" 'grep -q "<string>/usr/bin/eslogger</string><string>exec</string><string>authentication</string>" "$T/ld/com.esdaemon.eslogger.plist"'
 FIFO_PLIST="$(sed -n 's:.*<key>StandardOutPath</key><string>\(.*\)</string>.*:\1:p' "$T/ld/com.esdaemon.eslogger.plist")"
 FIFO_FILTER="$(bash -c "$(grep -E '^BASE=' "$ROOT/bin/filter.sh")"'; echo "$FIFO"')"
 ok "FIFO not under /var/run (wiped at boot)"      '[ -n "$FIFO_PLIST" ] && [ "${FIFO_PLIST#/var/run/}" = "$FIFO_PLIST" ]'
