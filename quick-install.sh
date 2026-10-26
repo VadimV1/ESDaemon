@@ -7,7 +7,7 @@
 #   ESDAEMON_REF    branch or tag to install (default: main)
 # Safe to re-run: an existing (tuned) config is kept, an older one is migrated, see install.sh.
 set -euo pipefail
-DEFAULT_REPO="OWNER/ESDaemon"            # set to the published owner/repo
+DEFAULT_REPO="VadimV1/ESDaemon"          # the published owner/repo
 REPO="${ESDAEMON_REPO:-$DEFAULT_REPO}"; REF="${ESDAEMON_REF:-main}"
 
 say()  { printf '\033[1m==>\033[0m %s\n' "$*"; }
@@ -68,11 +68,17 @@ Grant it once, then events start on their own (no reinstall needed):
 MSG
   exit 0
 fi
+# Re-fire a fresh marker every pass: right after a clean install eslogger has just (re)started and can need a
+# few seconds before it is subscribed to ES events; a marker fired once, too early, is never recorded.
+# Match with a capture + glob, never `log show ... | grep -q`: grep -q exits on the first hit and closes the
+# pipe, log show then dies of SIGPIPE, and under `set -o pipefail` that makes the whole `if` test FALSE even
+# when the marker was found — so a healthy install would always fall through to the "no events" warning below.
 MARK="esdaemon-install-check-$$"
-/bin/sh -c "true $MARK"
-for _ in 1 2 3 4 5 6 7 8 9 10; do
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  /bin/sh -c "true $MARK"
   sleep 1
-  if /usr/bin/log show --last 30s --predicate 'subsystem == "com.apple.eslogger"' --style ndjson 2>/dev/null | grep -q "$MARK"; then
+  FOUND="$(/usr/bin/log show --last 30s --predicate 'subsystem == "com.apple.eslogger"' --style ndjson 2>/dev/null || true)"
+  if [[ "$FOUND" == *"$MARK"* ]]; then
     say "events are flowing to the unified log (subsystem com.apple.eslogger)"
     echo "    watch:  log stream --info --predicate 'subsystem == \"com.apple.eslogger\" AND process == \"ESDaemon\"'"
     echo "    config: /usr/local/ESDaemon/configs/ESDaemon.cfg  (apply edits: sudo /usr/local/ESDaemon/reload.sh)"
@@ -81,7 +87,7 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 done
 cat <<'MSG'
 
-ESDaemon is installed, but no test event showed up in 10 seconds. Most often eslogger lacks Full Disk Access:
+ESDaemon is installed, but no test event showed up in 20 seconds. Most often eslogger lacks Full Disk Access:
   System Settings > Privacy & Security > Full Disk Access > + > Cmd-Shift-G > /usr/bin/eslogger
 Then check:  sudo launchctl print system/com.esdaemon.eslogger | grep -E 'state|last exit'
              cat /var/log/ESDaemon/*.stderr
