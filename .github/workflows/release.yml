@@ -1,0 +1,48 @@
+name: release
+# Runs when a tag like v0.1.0 is pushed, including a tag created from GitHub's "Draft a new release" page.
+# Checks the tag matches the VERSION file, runs the tests, builds a universal (arm64 + x86_64) ESDaemon binary and
+# attaches it to the release as ESDaemon-macos-universal (+ .sha256), which quick-install.sh and update.sh use.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+# Actions are pinned to a commit SHA (the comment names its release): a tag can be moved to other code.
+jobs:
+  release:
+    runs-on: macos-26   # a fixed image that ci.yml also tests; macos-latest moves on its own
+    timeout-minutes: 30
+    permissions:
+      contents: write   # create the release and attach the binary
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false   # the write token reaches only the publish step
+      - name: tag matches VERSION
+        run: |
+          want="v$(tr -d ' \r\n' < VERSION)"
+          [ "$GITHUB_REF_NAME" = "$want" ] || { echo "tag $GITHUB_REF_NAME does not match VERSION ($want): bump VERSION first"; exit 1; }
+      - name: use Apple's jq   # as in ci.yml: the tests run against the jq the release runs with
+        run: echo /usr/bin >> "$GITHUB_PATH"
+      - run: make lint && make test
+      - name: universal binary
+        run: |
+          mkdir -p build
+          swiftc -O -target arm64-apple-macos15  -o build/ESDaemon-arm64  src/ESDaemon.swift
+          swiftc -O -target x86_64-apple-macos15 -o build/ESDaemon-x86_64 src/ESDaemon.swift
+          lipo -create -output build/ESDaemon-macos-universal build/ESDaemon-arm64 build/ESDaemon-x86_64
+          codesign -s - -f build/ESDaemon-macos-universal
+          lipo -info build/ESDaemon-macos-universal
+          (cd build && shasum -a 256 ESDaemon-macos-universal > ESDaemon-macos-universal.sha256)
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # a release made on the website already exists for this tag: add the binary to it; otherwise create one
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber build/ESDaemon-macos-universal build/ESDaemon-macos-universal.sha256
+          else
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes build/ESDaemon-macos-universal build/ESDaemon-macos-universal.sha256
+          fi

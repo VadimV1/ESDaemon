@@ -16,6 +16,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - **`record_max` clamped to the 32759-byte unified-log ceiling** even at `0`, so an oversize record is always cut to valid JSON instead of being hard-truncated and dropped whole.
 - **`ParentImage` is `unknown` for a reparented process whose prior exec wasn't seen**, instead of mislabelling the process's own earlier image as its parent; `launchd_child` no longer treats a `ppid==1` process with no `original_ppid` as launchd-spawned.
 - **Self-exclusion hardened**: the `ppid==1` launchd-job heuristic now also requires `euid==0`, so an unprivileged user LaunchAgent can't match it.
+- **CI and the release workflow are in the repository.** 0.1.0 listed both, but they never reached GitHub. Every pull request and push to `main` now runs `make lint` and `make test` on Linux and on macOS 15 and 26 (on macOS against Apple's `/usr/bin/jq`), and checks that the `ESDaemon` binary it builds lands a record in the unified log. A `v*` tag that matches `VERSION` publishes the universal binary (`ESDaemon-macos-universal` + `.sha256`) that `quick-install.sh` and `update.sh` install.
 
 ## [0.1.0] — first public release
 
