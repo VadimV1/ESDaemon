@@ -223,10 +223,13 @@ def fit($max):
         EventID: .EventID, Image: .Image} | with_entries(select(.value != null)) end
   end;
 
-def emit($ev):
+# $rule_error: null, or why a rule could not be evaluated on this event (see verdict). It goes in before fit, so the
+# record still fits.
+def emit($ev; $rule_error):
   ( if   $cfg.format == "raw" then del(.__esd_parent, .__esd_chain, .__esd_self, .__esd_pimg, .__esd_cmdline)
     elif ($cfg.format | startswith("sysmon")) then sysmon($ev)
     else slim_rec($ev) end )
+  | if $rule_error == null then . else . + {esd_rule_error: $rule_error} end
   # os_log keeps at most 32759 bytes of a message and hard-cuts the rest into invalid JSON the SIEM drops whole, so
   # record_max is clamped to that ceiling even when set to 0 ("no software limit") or above it — the backend limit
   # is real regardless of config, so a record is always kept parseable.
@@ -283,14 +286,42 @@ def filter_fields($ev):
 
 # Log everything, then filter like Sysmon: an empty [include] includes every event, a non-empty one only events
 # matching one of its rules; an event matching any [exclude] rule is never logged (exclude wins).
+# A rule can fail on an event: a regex the regex engine gives up on, say, run on a command line the process itself
+# chose. A failed rule must never hide the event, so it counts as matching in [include] and as not matching in
+# [exclude]; only rules that evaluate cleanly drop an event. Result: false = not logged, true = logged, a string =
+# logged with that error in the record (esd_rule_error). An event whose fields cannot be read is logged that way too.
+def verdict($ev):
+  try (
+    filter_fields($ev) as $f
+    | def rule($s; $r):   # true, false, or why the rule failed
+        try ($r | rule_ok($f)) catch "\(tostring) in [\($s)]: \($r | map("\(.field) \(.op) \(.value)") | join(" AND "))";
+    # [include]: the first rule that matches or fails lets the event in
+    (if ($cfg.include | length) == 0 then true
+     else reduce $cfg.include[] as $r (false; if . == false then rule("include"; $r) else . end) end)
+    # [exclude]: the first rule that matches drops the event; a failed one is passed over, its error kept for the record
+    | reduce ($cfg.exclude // [])[] as $r (.;
+        if . == false then . else rule("exclude"; $r) as $m
+          | if $m == true then false elif . == true and $m != false then $m else . end end)
+  ) catch tostring;
 def decide:
   (.event | keys[0]) as $ev
   | if .__esd_self or (wanted($ev) | not) then empty else
-      filter_fields($ev) as $f
-      | if ((($cfg.include // []) | length) > 0 and (any($cfg.include[]; rule_ok($f)) | not)) then empty
-        elif any(($cfg.exclude // [])[]; rule_ok($f)) then empty
-        else emit($ev) end
+      verdict($ev) as $v
+      | if $v == false then empty elif $v == true then emit($ev; null) else emit($ev; $v) end
     end;
+
+# No record could be built for this event (a malformed event, or a bug): the marker written in its place still names
+# it, by EventKind (the eslogger event), User, Image and ProcessId of the process the record is about, each read on its
+# own so one bad field cannot take the others with it. In the sysmon formats it carries the Sysmon envelope, as the
+# gap marker does (255 is Sysmon's error event).
+def filter_error($x):
+  tostring as $err | (try ($x.event | keys[0]) catch null) as $ev
+  | def of_proc(f): try (if $ev == "exec" then $x.event.exec.target else $x.process end | f) catch null;
+  (if ($cfg.format | startswith("sysmon")) then
+     {EventID: 255, EventType: "esd_filter_error", UtcTime: (try ($x.time | sysmon_time) catch null)} else {} end)
+  + {esd_filter_error: $err, time: $x.time, EventKind: $ev,
+     User: of_proc(user_of(.audit_token.euid)), Image: of_proc(.executable.path), ProcessId: of_proc(.audit_token.pid)}
+  | with_entries(select(.value != null));
 
 # Main loop (run with jq -n -R): track global_seq_num across ALL raw events, before filtering.
 # A jump > 1 means EndpointSecurity dropped events (usually a slow reader filling the pipe). Emit a marker
@@ -358,6 +389,7 @@ foreach (inputs | fromjson? | select(type == "object" and (.event | type) == "ob
      | if ($cfg.format | startswith("sysmon")) then
          {EventID: 255, EventType: "eslogger_scoped_gap", UtcTime: (.time | sysmon_time)} + . else . end
    else empty end),
-  # a filter bug on one odd event must not kill the pipeline (and every event queued behind it): report it instead
-  (.e | . as $x | try decide catch {esd_filter_error: tostring, time: $x.time})
+  # a filter bug on one odd event must not kill the pipeline (and every event queued behind it): report it instead.
+  # Nor may the report: should the marker itself fail, the bare error is written.
+  (.e | . as $x | try decide catch (tostring as $err | try filter_error($x) catch {esd_filter_error: $err, time: $x.time}))
 )

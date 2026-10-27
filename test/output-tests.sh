@@ -124,5 +124,14 @@ ok "format=slim emits no null in exec block" '[ "$(run "$SMALL" "$(fmt slim)" | 
 ok "no OriginalFileName invented from the (renamable) path" '[ "$(run "$SMALL" | jq "has(\"OriginalFileName\")")" = false ]'
 ODD=$(printf '%s\n%s\n' '{"time":"t","event":{}}' "$SMALL" | jq -n -cR --argjson cfg "$CFG" -f "$ROOT/src/scope.jq")
 ok "an event the filter chokes on is reported, the next one still processed" '[ "$(echo "$ODD" | head -1 | jq -r "has(\"esd_filter_error\")")" = true ] && [ "$(echo "$ODD" | tail -1 | jq -r .Image)" = /usr/bin/curl ]'
+# a record that cannot be built (forced: cwd is a string, not {path}) leaves a marker that still names the event, shaped
+# for the format; raw, which never reads cwd, logs the event itself, saying the rules could not read it
+NOREC=$(jq -cn '{time:"2026-09-28T10:00:01Z",process:{executable:{path:"/bin/zsh"},audit_token:{pid:51,euid:501}},
+  event:{exec:{target:{executable:{path:"/usr/bin/curl"},audit_token:{pid:51,euid:501},ppid:100},args:["curl","-V"],cwd:"/tmp"}}}')
+ok "record that cannot be built: marker names the event, with the Sysmon envelope" '[ "$(run "$NOREC" | jq -c "[.EventID,.EventType,.UtcTime,.EventKind,.User,.Image,.ProcessId,(.esd_filter_error | length > 0)]")" = "[255,\"esd_filter_error\",\"2026-09-28 10:00:01.000\",\"exec\",\"alice\",\"/usr/bin/curl\",51,true]" ]'
+ok "same in slim: the marker without an envelope"  '[ "$(run "$NOREC" "$(fmt slim)" | jq -c "[has(\"EventID\"),.EventKind,.User,.Image,.ProcessId]")" = "[false,\"exec\",\"alice\",\"/usr/bin/curl\",51]" ]'
+ok "same in raw: the event itself, with the error" '[ "$(run "$NOREC" "$(fmt raw)" | jq -c "[.event.exec.target.executable.path, (.esd_rule_error | length > 0)]")" = "[\"/usr/bin/curl\",true]" ]'
+AROUND=$(printf '%s\n%s\n%s\n' "$BASH" "$NOREC" "$CURL" | jq -n -cR --argjson cfg "$CFG" -f "$ROOT/src/scope.jq" | jq -r '[.EventType, .Image, .ParentCommandLine] | join(",")' | tr "\n" ";")
+ok "events around it unaffected, the parent cache too" '[ "$AROUND" = "ProcessStart,/bin/bash,;esd_filter_error,/usr/bin/curl,;ProcessStart,/usr/bin/curl,bash ./run.sh;" ]'
 
 echo; echo "PASS $pass  FAIL $fail"; [ $fail -eq 0 ]

@@ -138,6 +138,26 @@ ok "not regex: python3 -c kept"           '[ "$(ev /bin/zsh /usr/bin/python3 "[\
 ok "missing field never matches (include)" '[ "$(ev /bin/zsh /bin/ls "[\"ls\"]" | n "$(cfg "\n[include]\nParentCommandLine is not x\n")")" = 0 ]'
 ok "missing field never matches (exclude)" '[ "$(ev /bin/zsh /bin/ls "[\"ls\"]" | n "$(cfg "\n[exclude]\nParentCommandLine is not x\n")")" = 1 ]'
 
+echo "-- a rule that fails on an event never hides it: no drop in [exclude], a match in [include], the error in the record"
+# A regex the regex engine gives up on (backtracking on a long command line the process chose) throws inside the rule.
+# Where an engine gives up depends on its version and limits, so these rules hold a regex that does not compile at
+# all: the same kind of error, from the same place, on every jq. cfg.sh refuses such a regex, so it goes in as JSON.
+BADRX='{"field":"CommandLine","op":"regex","value":"("}'
+FX="$(echo "$DEF" | jq -c --argjson b "$BADRX" '.exclude += [[{field:"Image",op:"image",value:"sh"}, $b]]')"
+FR="$(ev /bin/zsh /bin/sh '["sh"]' | jq -c '.event.exec.args = ["sh","-c",("A" * 100000),"tail-end"]' | jq -n -cR --argjson cfg "$FX" -f "$ROOT/src/scope.jq")"
+ok "failing [exclude] rule, 100 KB argv: logged, CommandLine head and tail kept" '[ "$(echo "$FR" | jq -c "[.Image, (.CommandLine | startswith(\"sh -c AAAA\") and endswith(\" tail-end\"))]")" = "[\"/bin/sh\",true]" ] && [ "$(printf %s "$FR" | wc -c | tr -d " ")" -le 32000 ]'
+ok "the record says which rule failed"                  '[ "$(echo "$FR" | jq ".esd_rule_error | endswith(\" in [exclude]: Image image sh AND CommandLine regex (\")")" = true ]'
+FXN="$(echo "$FX" | jq -c '.exclude[-1][1].op = "not regex"')"
+ok "a failing not regex does not drop it either"         '[ "$(ev /bin/zsh /bin/sh "[\"sh\"]" | jq -n -cR --argjson cfg "$FXN" -f "$ROOT/src/scope.jq" | jq -r .Image)" = /bin/sh ]'
+FI="$(echo "$DEF" | jq -c --argjson b "$BADRX" '.include = [[{field:"Image",op:"is",value:"/nope"}], [$b]]')"
+ok "failing [include] rule lets the event in, with the error" '[ "$(ev /bin/zsh /bin/ls "[\"ls\"]" | jq -n -cR --argjson cfg "$FI" -f "$ROOT/src/scope.jq" | jq -c "[.Image, (.esd_rule_error | endswith(\" in [include]: CommandLine regex (\"))]")" = "[\"/bin/ls\",true]" ]'
+F1="$(echo "$DEF" | jq -c --argjson b "$BADRX" '.exclude += [[$b], [{field:"Image",op:"is",value:"/bin/sh"}]]')"
+F2="$(echo "$DEF" | jq -c --argjson b "$BADRX" '.exclude += [[{field:"Image",op:"is",value:"/bin/sh"}], [$b]]')"
+ok "a rule that matches cleanly still drops it, before or after the failing one" '[ "$(ev /bin/zsh /bin/sh "[\"sh\"]" | n "$F1")" = 0 ] && [ "$(ev /bin/zsh /bin/sh "[\"sh\"]" | n "$F2")" = 0 ]'
+AROUND=$( { ev /bin/zsh /usr/bin/curl '["curl","x"]'; ev /bin/zsh /bin/sh '["sh","-c","y"]'; ev /bin/zsh /bin/ls '["ls"]'; } \
+          | jq -n -cR --argjson cfg "$FX" -f "$ROOT/src/scope.jq" | jq -r '"\(.Image):\(has("esd_rule_error"))"' | tr "\n" " ")
+ok "events around it unaffected: only the one the rule failed on carries the error" '[ "$AROUND" = "/usr/bin/curl:false /bin/sh:true /bin/ls:false " ]'
+
 echo "-- [modules] operations: what each event is called, and file read / write"
 P='{"executable":{"path":"/usr/bin/vim"},"audit_token":{"pid":44,"euid":501},"is_platform_binary":true,"signing_id":"com.apple.vim"}'
 # E <eslogger event> <event payload json>  -> one raw eslogger line
