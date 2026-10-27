@@ -84,6 +84,15 @@ Why these values:
 
 In the collector the body is the full `log show` line; ESDaemon's record is its `eventMessage` field, a JSON string. Parse `eventMessage` as JSON (a JSON parse processor in Bindplane, or your SIEM's parser) to get `EventID`, `Image`, `CommandLine` and the rest as fields.
 
+### Alert when a Mac goes silent
+
+A Mac whose pipeline has stopped sends nothing, just like a quiet Mac. So ESDaemon also logs a heartbeat every 5 minutes, `{"eslogger_scoped_heartbeat":300,"time":"…","records":42}`, with the number of records written since the previous one (`heartbeat` in `[settings]`, `0` = off). Set up two alerts per Mac:
+
+- **No heartbeat for more than two intervals** (alert at 11 minutes): the pipeline is down. The filter is stopped or keeps restarting, or the writer, the unified log or the collector is stuck. A Mac that is asleep or shut down sends none either.
+- **Heartbeats, but no `ProcessStart` for two intervals:** eslogger is down or lost Full Disk Access.
+
+The record's fields, its Sysmon form and what to check for each alert: [CONFIG.md](CONFIG.md#heartbeat).
+
 ## 6. Tune what is logged
 
 Read [DEFAULT-CONFIG.md](DEFAULT-CONFIG.md) for what the default logs and drops, and [CONFIG.md](CONFIG.md) for every option. The loop:
@@ -128,3 +137,4 @@ The `esdaemon` command removes everything it installed, itself included — noth
 | A burst of old records after a reboot | the collector replaying `max_log_age` of history on startup: set it to 1 hour (step 5) |
 | `eslogger_scoped_gap` records | Endpoint Security dropped events because the reader fell behind (very high load); the record says how many |
 | `eslogger_scoped_restart` records | eslogger restarted (reload, crash, boot); events during the restart are not seen |
+| No `eslogger_scoped_heartbeat` records | the filter or the collector is down, or `heartbeat = 0`: check that both daemons run (above), then the collector; see [CONFIG.md](CONFIG.md#heartbeat) |

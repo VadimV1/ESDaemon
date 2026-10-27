@@ -19,6 +19,8 @@ user = login
 
 **Supported feeds for now: `process` and `user` only.** The `file` and `system` modules are recognised by the config DSL but their feeds are not developed yet — experimental and unsupported for now. Also not on by default: process exit and injection, and (within the undeveloped modules) file create/delete/read/write/rename, account changes, persistence, XProtect, kernel extensions and mounts. See [CONFIG.md](CONFIG.md#what-to-log-modules).
 
+Every 5 minutes it also logs a heartbeat (`heartbeat = 300` in `[settings]`), so a Mac whose pipeline has stopped does not pass for a quiet one: two records per 10 minutes on top of the figures below. The alerts to set up on it: [CONFIG.md](CONFIG.md#heartbeat).
+
 ## What it drops, and why that is safe
 
 Every rule names an exact binary; the file rules also name that binary's own folder. Anything else writing to the same places, or a copy of the binary somewhere else, is still logged.
