@@ -8,7 +8,7 @@
 
 ESDaemon turns Endpoint Security events (process starts and logins today; file events and more are on the roadmap) into compact Sysmon-style JSON in the macOS unified log, filtered by a config you control. Any log collector that reads the unified log, such as the Bindplane / OpenTelemetry macOS receiver, ships them to your SIEM.
 
-No kernel extension, no Apple entitlement, no agent to license: it runs `/usr/bin/eslogger`, which ships with macOS.
+No kernel extension, no Apple entitlement, no third-party code, no agent to license: it runs `/usr/bin/eslogger`, which ships with macOS.
 
 ```
 /usr/bin/eslogger ──► ESDaemon filter ([modules], [include] / [exclude]) ──► unified log ──► collector ──► SIEM
@@ -22,6 +22,16 @@ No kernel extension, no Apple entitlement, no agent to license: it runs `/usr/bi
 - **Investigations on macOS.** Process trees (`ProcessGuid` / `ParentProcessGuid`), persistence (LaunchAgents and login items), quarantine removal, account changes, SSH logins and failures, all searchable.
 - **Control over volume.** Raw `eslogger` output is several GB per Mac per day. ESDaemon logs only the event types you choose and drops what you exclude, with Sysmon's include/exclude rules. The default config drops Apple's own housekeeping: an idle Mac goes from about 95 records per 10 minutes to about 13.
 - **Fleet-friendly.** One config file, validated before anything runs, an MDM profile for the one permission it needs, and a filter that never logs itself.
+
+## No third-party dependencies
+
+ESDaemon is bash, the command-line tools that ship with macOS, and one small Swift file. There is no package manager, no third-party library and no vendored code.
+
+- **Scripts** use bash and the tools macOS ships in `/bin` and `/usr/bin`, on its sealed system volume: `eslogger`, `jq` (part of macOS since 15), `launchctl`, `log`, `plutil`, `codesign`, `dscl`, `awk` and the standard POSIX utilities.
+- **The writer** (`src/ESDaemon.swift`) imports only Apple's `Foundation` and `os.log`. It is built with Apple's `swiftc` from the Xcode Command Line Tools, or comes prebuilt from this repository's releases.
+- **Network:** none at run time. The only network access is to this repository on GitHub, when you run `quick-install.sh` or `esdaemon update`.
+
+What you trust is macOS and this repository; see [SECURITY.md](SECURITY.md).
 
 ## Quick start
 
