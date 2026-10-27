@@ -8,8 +8,11 @@ From a clean Mac to ESDaemon events in your SIEM. About 10 minutes for one Mac.
 |---|---|
 | macOS 15 or later (Apple silicon or Intel) | ESDaemon's filter uses `/usr/bin/jq`, which ships with macOS 15 |
 | Admin rights (`sudo`) | it installs two LaunchDaemons |
+| Only root can write to `/usr/local` and the directories above it (the macOS default) | the daemons run as root from `/usr/local/ESDaemon`; the installer checks this and stops if another user could change the install tree or a directory above it |
 | Xcode Command Line Tools (`xcode-select --install`) | only to build the small `ESDaemon` binary; not needed with a prebuilt release binary |
 | A log collector that reads the macOS unified log | to ship events off the Mac (step 5) |
+
+**Homebrew on an Intel Mac.** `/usr/local/bin` belongs to the Homebrew user there, so anything running as that user can replace a command in it, without sudo. Leave it as it is: the installer puts no `esdaemon` command there, says so, and you run the copy in the install tree instead, `sudo /usr/local/ESDaemon/bin/esdaemon status` and so on. If `/usr/local` itself belongs to your user (older Homebrew installs did that), the installer stops: give it back to root with `sudo chown root:wheel /usr/local && sudo chmod 755 /usr/local`. Current Homebrew needs only the subdirectories it owns.
 
 ## 2. Install
 
@@ -32,8 +35,9 @@ What lands on the Mac:
 
 | Path | What |
 |---|---|
-| `/usr/local/ESDaemon/` | the filter, helper scripts and `ESDaemon` binary |
+| `/usr/local/ESDaemon/` | the filter, helper scripts, `ESDaemon` binary and `bin/esdaemon` command |
 | `/usr/local/ESDaemon/configs/ESDaemon.cfg` | **the config you edit** |
+| `/usr/local/bin/esdaemon` | the `esdaemon` command on `PATH`, when only root can write to `/usr/local/bin` |
 | `/Library/LaunchDaemons/com.esdaemon.eslogger.plist` | runs `/usr/bin/eslogger` for the event types `[modules]` needs |
 | `/Library/LaunchDaemons/com.esdaemon.filter.plist` | runs the filter, which writes records to the unified log |
 | `/var/log/ESDaemon/` | the two daemons' error output |
@@ -123,7 +127,7 @@ sudo esdaemon uninstall            # keeps a copy of your config in /var/log/ESD
 sudo esdaemon uninstall --purge    # removes that too
 ```
 
-The `esdaemon` command removes everything it installed, itself included — nothing is left on disk and there is no separate script to download or keep. (A checkout can still use `sudo ./uninstall.sh`, or `curl -fsSL https://raw.githubusercontent.com/<owner>/ESDaemon/main/uninstall.sh | sudo bash`; both forward to the installed command when it is present.) Revoke eslogger's Full Disk Access in System Settings, or remove the MDM profile.
+The `esdaemon` command removes everything it installed, itself included — nothing is left on disk and there is no separate script to download or keep. (A checkout can still use `sudo ./uninstall.sh`, or `curl -fsSL https://raw.githubusercontent.com/<owner>/ESDaemon/main/uninstall.sh | sudo bash`. Both remove the same things without running the installed command or anything else from `/usr/local/ESDaemon`: use them when `esdaemon status` says UNSAFE.) Revoke eslogger's Full Disk Access in System Settings, or remove the MDM profile.
 
 ## Troubleshooting
 
@@ -132,6 +136,9 @@ The `esdaemon` command removes everything it installed, itself included — noth
 | No records at all | `cat /var/log/ESDaemon/eslogger.stderr`: a "not permitted" error means Full Disk Access is missing (step 3) |
 | Daemons not running | `sudo launchctl print system/com.esdaemon.eslogger \| grep -E 'state\|last exit'`, same for `com.esdaemon.filter`; then `cat /var/log/ESDaemon/filter.stderr` |
 | `reload.sh` refuses the config | it prints the line and the reason; nothing was changed. Fix the line and run it again |
+| `install.sh` or `reload.sh` stops: "… is owned by uid …", "… is group-writable", "… is a symbolic link" | another user could change the install tree or a directory above it. Run the `fix:` command printed for each path, then run it again. If another user could write there before, remove ESDaemon with `uninstall.sh` and install it again |
+| `esdaemon status` says `UNSAFE` (exit 1) | the same, found after the install: fix each path it lists. For `command … UNSAFE`, delete `/usr/local/bin/esdaemon` and use `sudo /usr/local/ESDaemon/bin/esdaemon` |
+| `esdaemon: command not found` | an Intel Mac with Homebrew: use `sudo /usr/local/ESDaemon/bin/esdaemon` (step 1) |
 | Records cut off or not valid JSON | a custom `subsystem` / `category`: `reload.sh` turns on large messages for it; keep `record_max` at or below 32000 |
 | Same record many times in the SIEM | the collector, not ESDaemon: use `ndjson` and a receiver version from step 5 |
 | A burst of old records after a reboot | the collector replaying `max_log_age` of history on startup: set it to 1 hour (step 5) |

@@ -8,7 +8,8 @@
 #        rule = [{field, op, value}, ...]  (clauses ANDed; rules in a section ORed)
 
 # ESDaemon's own install. Its processes are never logged (see the main loop), or every record it writes would
-# spawn more records. Only root can put a binary here or start the launchd jobs.
+# spawn more records. Only root can put a binary here or start the launchd jobs: install.sh, reload.sh and
+# esdaemon status check that nobody else can write here or above (bin/chain.sh).
 def esd_base: "/usr/local/ESDaemon/";
 def keep_env: [ (.[]? // empty) | select(test("^(XPC_SERVICE_NAME|PATH|USER|LOGNAME|HOME|SHELL|SUDO_[A-Z]+|DYLD_[A-Z_]+|LD_[A-Z_]+|SSH_CONNECTION|TERM_PROGRAM)=")) ];
 

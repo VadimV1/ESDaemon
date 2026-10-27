@@ -1,7 +1,8 @@
 #!/bin/bash
-# esdaemon — ESDaemon control command, installed on PATH at /usr/local/bin/esdaemon.
+# esdaemon — ESDaemon control command, installed as /usr/local/ESDaemon/bin/esdaemon, and on PATH as /usr/local/bin/esdaemon
+# when only root can write there (with Homebrew on an Intel Mac it can't: run sudo /usr/local/ESDaemon/bin/esdaemon).
 # Everything you do to a running ESDaemon goes through here; nothing else needs to stay on disk.
-#   esdaemon status                 is it running, which version, where is the config
+#   esdaemon status                 running? version? config? can only root change it? (exit 1 if not)
 #   esdaemon reload                 apply config edits (regenerate + restart the daemons)   [root]
 #   esdaemon update [--install]     check for / install the latest GitHub release
 #   esdaemon logs                   stream ESDaemon's records from the unified log
@@ -41,6 +42,27 @@ case "$cmd" in
     done
     echo "version          $(tr -d ' \r\n' < "$BASE/VERSION" 2>/dev/null || echo 'not installed')"
     echo "config           $BASE/configs/ESDaemon.cfg"
+    # The same check install.sh and reload.sh make (chain.sh): a directory that changed owner or became writable for
+    # others after the install shows up here. It runs the tree's own chain.sh, so it can't vouch for a tree someone
+    # already changed.
+    rc=0
+    if [ ! -f "$BASE/chain.sh" ]; then
+      echo "permissions      not checked ($BASE/chain.sh missing)"
+    else
+      # shellcheck source=bin/chain.sh
+      . "$BASE/chain.sh"
+      if why="$(esd_root_only_tree "$BASE")"; then
+        echo "permissions      only root can change $BASE and the directories above it"
+      else
+        echo "permissions      UNSAFE: users other than root can change $BASE or a directory above it"; printf '%s\n' "$why"; rc=1
+      fi
+      if { [ -e "$SELF" ] || [ -L "$SELF" ]; } && ! why="$(esd_root_only "$SELF")"; then
+        echo "command          UNSAFE: users other than root can replace $SELF, which runs as root"
+        printf '%s\n' "$why" | sed 's/; fix: .*//'
+        echo "  fix: sudo rm $SELF, and run sudo $BASE/bin/esdaemon instead"; rc=1
+      fi
+    fi
+    exit $rc
     ;;
 
   reload)
@@ -80,8 +102,9 @@ case "$cmd" in
     fi
     rm -rf "$BASE" /var/run/ESDaemon
     [ $purge = 1 ] && rm -rf "$LOGS" && echo "removed $LOGS"
-    # remove this command last — bash has already read the script, so deleting it mid-run is safe
-    rm -f "$SELF" && echo "removed $SELF"
+    # the command on PATH last, if the install put it there (the copy in $BASE went with it). Deleting the script that
+    # is running is safe: bash keeps reading the file it has open.
+    if [ -e "$SELF" ] || [ -L "$SELF" ]; then rm -f "$SELF" && echo "removed $SELF"; fi
     echo "ESDaemon removed. Revoke Full Disk Access for /usr/bin/eslogger in System Settings, or remove the MDM profile, if you no longer need it."
     ;;
 

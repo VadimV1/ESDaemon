@@ -4,17 +4,14 @@
 #   sudo ./uninstall.sh --purge    also delete /var/log/ESDaemon (config copy and the daemons' stderr logs)
 #
 # Once ESDaemon is installed you do not need this file at all: the installed control command removes
-# everything itself, including itself —  sudo esdaemon uninstall [--purge].  This script just forwards to
-# it, and falls back to removing things in place if the control command is missing (a broken/old install).
+# everything itself, including itself —  sudo esdaemon uninstall [--purge].  This script removes the same
+# things in place instead of running the installed command, so it is also the way to remove an install
+# another user may have changed (esdaemon status: UNSAFE) without running anything from the install tree.
 # Records ESDaemon already wrote stay in the unified log until macOS rotates them out.
 set -uo pipefail
 BASE=/usr/local/ESDaemon; LD=/Library/LaunchDaemons; LOGS=/var/log/ESDaemon
 [ "$(id -u)" = 0 ] || { echo "run as root: sudo $0" >&2; exit 1; }
 
-# Prefer the installed control command — one code path for removal, always current with the install.
-if [ -x /usr/local/bin/esdaemon ]; then exec /usr/local/bin/esdaemon uninstall "$@"; fi
-
-# Fallback: no control command present, remove in place.
 PURGE=0; [ "${1:-}" = --purge ] && PURGE=1
 for j in filter eslogger; do
   launchctl bootout "system/com.esdaemon.$j" 2>/dev/null && echo "stopped com.esdaemon.$j"

@@ -94,7 +94,7 @@ Some operations need events an older macOS's eslogger does not have; those event
 
 ESDaemon's own records, the drop markers (`eslogger_scoped_gap`, `eslogger_scoped_restart`) and the heartbeat (`eslogger_scoped_heartbeat`), are always written; rules do not apply to them.
 
-**ESDaemon never logs itself.** Otherwise every record it writes would create more records. Not logged: binaries under `/usr/local/ESDaemon/`, and the launchd job that runs `filter.sh` together with every process it is *responsible* for (its `cfg.sh`, `jq`, `awk` … helpers). Joining that set takes root: a launchd job, or files under `/usr/local/ESDaemon/`. An administrator running `sudo /usr/local/ESDaemon/reload.sh` by hand is logged like any other admin action.
+**ESDaemon never logs itself.** Otherwise every record it writes would create more records. Not logged: binaries under `/usr/local/ESDaemon/`, and the launchd job that runs `filter.sh` together with every process it is *responsible* for (its `cfg.sh`, `jq`, `awk` … helpers). Joining that set takes root: a launchd job, or files under `/usr/local/ESDaemon/`. That holds only while nobody else can write there, so `install.sh` and `reload.sh` refuse to run, and `esdaemon status` says `UNSAFE`, when anything in `/usr/local/ESDaemon` or a directory above it is not root's alone. The check runs only when they do: a directory that becomes writable for others in between shows up at the next install, reload or status. ESDaemon does not also match its own code signature: it is signed ad hoc, so its signing identifier is one anyone can give their own binary, and its cdhash changes with every build. An administrator running `sudo /usr/local/ESDaemon/reload.sh` by hand is logged like any other admin action.
 
 ## Heartbeat
 
