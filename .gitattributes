@@ -1,0 +1,4 @@
+# LF for every text file, in git and in every checkout, also under core.autocrlf=true (Git for Windows'
+# default): a script checked out with CRLF fails on macOS at #!/bin/bash\r. make lint fails on CRLF in git.
+* text=auto eol=lf
+*.png binary

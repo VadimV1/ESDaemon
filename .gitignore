@@ -1,0 +1,5 @@
+build/
+# local captures (eslogger, log show) hold real command lines and environments; test fixtures are kept
+*.ndjson
+!test/fixtures/*.ndjson
+.DS_Store
