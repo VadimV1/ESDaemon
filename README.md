@@ -28,7 +28,7 @@ No kernel extension, no Apple entitlement, no agent to license: it runs `/usr/bi
 On a Mac with macOS 15 or later (`/usr/bin/jq` ships with it):
 
 ```bash
-git clone https://github.com/<owner>/ESDaemon.git && cd ESDaemon
+git clone https://github.com/VadimV1/ESDaemon.git && cd ESDaemon
 sudo ./quick-install.sh
 ```
 
