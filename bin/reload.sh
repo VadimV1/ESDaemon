@@ -5,6 +5,12 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; BASE=/usr/local/ESDaemon; RUN="$BASE/run"; FIFO="$RUN/raw.fifo"; LD=/Library/LaunchDaemons
 CFGF="$BASE/configs/ESDaemon.cfg"; RENDER=""
 if [ "${1:-}" = --render ]; then RENDER="${2:?output dir}"; CFGF="${3:-$CFGF}"; fi
+# Restarting the root daemons on files another user could have changed would run that user's code as root: stop first
+# unless only root can change $BASE, what is in it and every directory above it (chain.sh). --render changes nothing.
+if [ -z "$RENDER" ]; then
+  # shellcheck source=bin/chain.sh
+  . "$HERE/chain.sh"; esd_gate "$BASE" reload.sh || exit 1
+fi
 # bash-invoked: a GitHub tarball/ZIP (or a Windows push) may drop the execute bit on cfg.sh
 bash "$HERE/cfg.sh" "$CFGF" json >/dev/null || { echo "ESDaemon.cfg is invalid, nothing changed"; exit 1; }
 EVENTS="$(bash "$HERE/cfg.sh" "$CFGF" events)"; [ -n "$EVENTS" ] || EVENTS="exec"

@@ -65,6 +65,8 @@ sudo esdaemon uninstall      # remove ESDaemon completely, the command itself in
 
 `sudo esdaemon uninstall --purge` also deletes the saved config and logs. The standalone `./uninstall.sh` (or `curl -fsSL https://raw.githubusercontent.com/VadimV1/ESDaemon/main/uninstall.sh | sudo bash`) still works for a checkout or a broken install.
 
+On an Intel Mac with Homebrew, `/usr/local/bin` belongs to the Homebrew user, so `esdaemon` is not put on `PATH` there: run it as `sudo /usr/local/ESDaemon/bin/esdaemon` (see [Requirements](#requirements-and-limits)).
+
 **Full walkthrough, including collector setup: [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).**
 
 ## What a record looks like
@@ -111,14 +113,14 @@ TeamId is any UBF8T346G9;EQHXZ8M8AV
 | Path | What |
 |---|---|
 | `quick-install.sh` | one-step install: fetch, build, install, check |
-| `install.sh` | install from a checkout (also installs the `esdaemon` command on PATH) |
-| `bin/esdaemon` | the control command (`status`, `reload`, `update`, `logs`, `uninstall`); installed to `/usr/local/bin` |
+| `install.sh` | install from a checkout (also installs the `esdaemon` command, on PATH where only root can write) |
+| `bin/esdaemon` | the control command (`status`, `reload`, `update`, `logs`, `uninstall`); installed as `/usr/local/ESDaemon/bin/esdaemon`, and in `/usr/local/bin` when only root can write there |
 | `uninstall.sh` | standalone removal for a checkout / broken install (an install uses `esdaemon uninstall`) |
 | `VERSION`, `REPO` | the release version and the GitHub repository `update.sh` checks |
 | `configs/ESDaemon.cfg` | the default config |
 | `src/scope.jq` | the filter: modules, include/exclude rules, Sysmon-style records |
 | `src/ESDaemon.swift` | writes each record to the unified log (`os_log`, `%{public}@`) |
-| `bin/` | `cfg.sh` (parse + validate), `filter.sh`, `reload.sh`, `measure.sh` (volume per source), `try.sh` (dry-run a config), `update.sh` (check / install the latest release), `migrate-cfg.sh` |
+| `bin/` | `cfg.sh` (parse + validate), `filter.sh`, `reload.sh`, `chain.sh` (checks that only root can change the install tree and the directories above it), `measure.sh` (volume per source), `try.sh` (dry-run a config), `update.sh` (check / install the latest release), `migrate-cfg.sh` |
 | `mdm/` | PPPC profile granting `eslogger` Full Disk Access |
 | `test/` | `make test`: filter, config and format tests (macOS or Linux, needs `jq`) |
 | `redteam/` | adversary-emulation harness: benign, self-cleaning macOS attack techniques that confirm ESDaemon logs them ([redteam/README.md](redteam/README.md)) |
@@ -127,6 +129,8 @@ TeamId is any UBF8T346G9;EQHXZ8M8AV
 ## Requirements and limits
 
 - macOS 15 or later (for `/usr/bin/jq`), Apple silicon or Intel. Building needs Xcode Command Line Tools, unless you use a prebuilt release binary.
+- Only root may be able to write to `/usr/local` and the directories above it (the macOS default): the daemons run as root from `/usr/local/ESDaemon`. The installer, `esdaemon reload` and `esdaemon status` check this; the installer and reload stop without changing anything if another user could change the install tree or a directory above it, and print the command that fixes each path.
+- Homebrew on an Intel Mac: `/usr/local/bin` belongs to the Homebrew user. Leave it as it is: the installer then puts no `esdaemon` command there, and you run it as `sudo /usr/local/ESDaemon/bin/esdaemon`. If `/usr/local` itself belongs to your user (older Homebrew installs did that), give it back to root: `sudo chown root:wheel /usr/local && sudo chmod 755 /usr/local`. Current Homebrew needs only the subdirectories it owns.
 - `eslogger` needs Full Disk Access; ESDaemon's own filter does not.
 - Network connections are not an `eslogger` event; use DNS or proxy telemetry for those.
 - The filter sees every event locally (a little CPU); what it saves is the bytes shipped and stored.
