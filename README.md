@@ -63,7 +63,7 @@ esdaemon update --install    # check for / install the latest release
 sudo esdaemon uninstall      # remove ESDaemon completely, the command itself included
 ```
 
-`sudo esdaemon uninstall --purge` also deletes the saved config and logs. The standalone `./uninstall.sh` (or `curl -fsSL https://raw.githubusercontent.com/<owner>/ESDaemon/main/uninstall.sh | sudo bash`) still works for a checkout or a broken install.
+`sudo esdaemon uninstall --purge` also deletes the saved config and logs. The standalone `./uninstall.sh` (or `curl -fsSL https://raw.githubusercontent.com/VadimV1/ESDaemon/main/uninstall.sh | sudo bash`) still works for a checkout or a broken install.
 
 **Full walkthrough, including collector setup: [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).**
 
