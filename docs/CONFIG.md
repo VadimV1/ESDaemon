@@ -27,7 +27,7 @@ sudo /usr/local/ESDaemon/reload.sh                        # 4. apply (refuses an
 
 | Section | What it holds |
 |---|---|
-| `[settings]` | `subsystem`, `category`, `format`, `parent_cmdline_max`, `args_max`, `record_max` |
+| `[settings]` | `subsystem`, `category`, `format`, `parent_cmdline_max`, `args_max`, `record_max`, `heartbeat` |
 | `[modules]` | what to log: `<object> = <operation>, …` (see [What to log](#what-to-log-modules)). Nothing listed = `process = start` |
 | `[include]` | **empty (default): every event is included.** With rules: only events matching at least one rule are logged |
 | `[exclude]` | events matching any rule are never logged, even if `[include]` matched (**exclude wins**, as in Sysmon) |
@@ -42,6 +42,7 @@ sudo /usr/local/ESDaemon/reload.sh                        # 4. apply (refuses an
 | `parent_cmdline_max` | characters of `ParentCommandLine` written per event (`0` = no cap). The parent's command line is repeated in every child event, so one long parent inflates all its children; the cut value ends with `…[+N chars]`. `CommandLine` is only cut to fit `record_max`. Rules match the full parent command line. | `256` |
 | `args_max` | most `argv` elements rendered into `CommandLine` (`0` = no software cap, but still clamped by the ceiling below). `argv` is attacker-controlled and can hold hundreds of thousands of entries; rendering them all stalls the single-threaded filter for seconds and makes macOS drop events, so beyond this count the line is cut with a `…[+N args]` marker. Normal commands have far fewer. | `4096` |
 | `record_max` | largest record (bytes) written to the unified log. The unified log keeps at most 32759 bytes of a message and cuts the rest, which leaves invalid JSON the SIEM drops whole, so this is **clamped to 32759 even when set to `0`** ("no software limit") or higher — the backend limit is real regardless of config, and a record is always kept parseable. A bigger record has its largest value (usually `CommandLine`) cut in the middle, marked `…[+N chars]…`, keeping the start and the end. Rules still see the full values. | `32000` |
+| `heartbeat` | seconds between two heartbeat records, which tell a stopped pipeline from a quiet Mac (see [Heartbeat](#heartbeat)). `0` = off; at most `86400` (a day). | `300` |
 
 ## What to log: `[modules]`
 
@@ -91,9 +92,30 @@ Some operations need events an older macOS's eslogger does not have; those event
 3. an `[exclude]` rule matches → **not logged**
 4. otherwise → **logged**
 
-ESDaemon drop markers (`eslogger_scoped_gap`, `eslogger_scoped_restart`) are always written; rules do not apply to them.
+ESDaemon's own records, the drop markers (`eslogger_scoped_gap`, `eslogger_scoped_restart`) and the heartbeat (`eslogger_scoped_heartbeat`), are always written; rules do not apply to them.
 
 **ESDaemon never logs itself.** Otherwise every record it writes would create more records. Not logged: binaries under `/usr/local/ESDaemon/`, and the launchd job that runs `filter.sh` together with every process it is *responsible* for (its `cfg.sh`, `jq`, `awk` … helpers). Joining that set takes root: a launchd job, or files under `/usr/local/ESDaemon/`. An administrator running `sudo /usr/local/ESDaemon/reload.sh` by hand is logged like any other admin action.
+
+## Heartbeat
+
+A Mac whose pipeline has stopped sends nothing, and so does a quiet Mac. The heartbeat tells them apart: while the filter runs, the `ESDaemon` writer logs a record of its own every `heartbeat` seconds (300 by default), among the events and with the same subsystem, category and process, so the collector ships it as it is:
+
+```json
+{"eslogger_scoped_heartbeat":300,"time":"2026-10-27T12:00:00Z","records":42}
+```
+
+- `eslogger_scoped_heartbeat` is the interval in seconds: the next heartbeat is due within that time.
+- `records` is how many records ESDaemon wrote since the previous heartbeat, events and markers. It is exact: if the SIEM received fewer records from that Mac between two heartbeats, the difference was lost after ESDaemon wrote it.
+- In the `sysmon` formats the record starts with the Sysmon envelope, as the gap marker's does: `{"EventID":100,"EventType":"eslogger_scoped_heartbeat","UtcTime":"2026-10-27 12:00:00.000",…}`. EventID 100 is ESDaemon's own. Sysmon's service event (4) is not reused: Sysmon writes it only when its service starts or stops.
+
+The first heartbeat comes a full interval after the filter starts, so a filter that keeps restarting sends none, and they stop when the filter job stops. The writer is the only process writing the log stream, so a heartbeat never lands inside an event record. The interval counts while the Mac is awake; a Mac that is asleep, shut down or offline sends no heartbeats either.
+
+Set up two alerts per Mac:
+
+| Alert | Means |
+|---|---|
+| **No heartbeat for more than two intervals.** With the default 300, alert at 11 minutes: a restart can stretch one gap to two intervals plus the restart's few seconds, and the collector adds its delay. | **The pipeline is down:** the filter is stopped or keeps restarting, or the writer, the unified log or the collector is stuck. `eslogger_scoped_restart` records about every 10 seconds mean eslogger keeps exiting and the filter restarts with it, most often because eslogger has no Full Disk Access (`/var/log/ESDaemon/eslogger.stderr` says why). |
+| **Heartbeats, but no `ProcessStart` for two intervals** (or `records` 0 in two heartbeats in a row). | **eslogger is down or lost Full Disk Access:** the filter and the writer run, but no events reach them. Check `sudo launchctl print system/com.esdaemon.eslogger` and `eslogger.stderr`. `[include]` / `[exclude]` rules that drop every launch look the same. |
 
 ## Rules
 

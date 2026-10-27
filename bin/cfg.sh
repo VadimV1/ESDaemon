@@ -36,7 +36,7 @@ NORM="$(LC_ALL=C awk '
   function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
   BEGIN { split("settings modules include exclude drop", a, " "); for (i in a) known[a[i]]=1
           split("always download conditional noisy_team_ids noisy_path_prefixes", a, " "); for (i in a) gone[a[i]]=1
-          split("subsystem category format parent_cmdline_max args_max record_max slim", a, " "); for (i in a) keys[a[i]]=1
+          split("subsystem category format parent_cmdline_max args_max record_max heartbeat slim", a, " "); for (i in a) keys[a[i]]=1
           n = split(ENVIRON["MODTAB"], rows, "\n")
           for (i = 1; i <= n; i++) { if (split(rows[i], c, " ") >= 3) { mod[c[1] " " c[2]] = 1; obj[c[1]] = obj[c[1]] " " c[2] } } }
   NR == 1 { sub(/^\357\273\277/, "") }
@@ -66,7 +66,7 @@ NORM="$(LC_ALL=C awk '
     k=trim(substr(line, 1, i-1)); v=trim(substr(line, i+1))
     if (k == "third_party") err("third_party was removed: every executable is logged now; filter with [exclude] (e.g. TeamId is EQHXZ8M8AV)")
     if (k == "events") err("events was removed: list what to log under [modules], e.g.  process = start  /  file = read, write")
-    if (!(k in keys)) err("unknown setting \"" k "\"  (valid: subsystem category format parent_cmdline_max args_max record_max)")
+    if (!(k in keys)) err("unknown setting \"" k "\"  (valid: subsystem category format parent_cmdline_max args_max record_max heartbeat)")
     if (k in seen) err("\"" k "\" is set twice (first on line " seen[k] ")")
     seen[k]=NR
     if (v != "") {
@@ -75,6 +75,8 @@ NORM="$(LC_ALL=C awk '
       if (k == "parent_cmdline_max" && v !~ /^[0-9]+$/)                     err("parent_cmdline_max must be a whole number (0 = no cap)")
       if (k == "args_max"           && v !~ /^[0-9]+$/)                     err("args_max must be a whole number of argv elements (0 = no cap)")
       if (k == "record_max" && v !~ /^[0-9]+$/)                             err("record_max must be a whole number of bytes (0 = no limit)")
+      # at most a day: 300000 (meant as milliseconds) fails here instead of spacing the heartbeats 3.5 days apart
+      if (k == "heartbeat" && (v !~ /^[0-9]+$/ || v + 0 > 86400))           err("heartbeat must be a whole number of seconds, at most 86400 (0 = off)")
       if ((k == "subsystem" || k == "category") && v !~ /^[A-Za-z0-9._-]+$/) err(k " may only contain letters, digits, . _ -")
     }
     print sect "\t" k "=" v; next }
