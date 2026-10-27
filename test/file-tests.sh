@@ -6,7 +6,7 @@ P='{"executable":{"path":"/usr/bin/curl"},"audit_token":{"pid":1},"is_platform_b
 newp() { echo "{\"time\":\"t\",\"process\":$P,\"event\":{\"create\":{\"destination_type\":1,\"destination\":{\"new_path\":{\"dir\":{\"path\":\"$1\"},\"filename\":\"$2\",\"mode\":420}}}}}"; }
 exist() { echo "{\"time\":\"t\",\"process\":$P,\"event\":{\"create\":{\"destination_type\":0,\"destination\":{\"existing_file\":{\"path\":\"$1\",\"stat\":{}}}}}}"; }
 ren() { echo "{\"time\":\"t\",\"process\":$P,\"event\":{\"rename\":{\"source\":{\"path\":\"$1\"},\"destination_type\":1,\"destination\":{\"new_path\":{\"dir\":{\"path\":\"$2\"},\"filename\":\"$3\"}}}}}"; }
-t() { local want=$1 name=$2 line=$3; local g=$([ "$(echo "$line" | jq -n -cR --argjson cfg "$CFG" -f "$ROOT/src/scope.jq" | wc -l | tr -d ' ')" = 1 ] && echo KEEP || echo DROP)
+t() { local want=$1 name=$2 line=$3; local g; g=$([ "$(echo "$line" | jq -n -cR --argjson cfg "$CFG" -f "$ROOT/src/scope.jq" | wc -l | tr -d ' ')" = 1 ] && echo KEEP || echo DROP)
   [ "$g" = "$want" ] && { pass=$((pass+1)); printf "  ok   %-4s %s\n" $g "$name"; } || { fail=$((fail+1)); printf "  FAIL want %s got %s %s\n" $want $g "$name"; }; }
 t KEEP "LaunchAgent plist created"     "$(newp /Users/a/Library/LaunchAgents com.evil.plist)"
 t KEEP "ccache in /tmp"                "$(newp /tmp krb5cc_501.ccache)"
@@ -24,7 +24,7 @@ mk(){ echo "{\"time\":\"t$1\",\"global_seq_num\":$1,\"process\":{\"executable\":
 g=$( (mk 1; mk 2; mk 5) | jq -n -cR --argjson cfg "$CFG" -f "$ROOT/src/scope.jq" | sed -n 3p)
 [ "$g" = '{"eslogger_scoped_gap":2,"time":"t5","after_global_seq_num":2}' ] && { pass=$((pass+1)); echo "  ok   ES drop (seq 2->5) emits gap marker before the next event"; } || { fail=$((fail+1)); echo "  FAIL gap: $g"; }
 XCFG=$(echo "$CFG" | jq -c '.exclude += [[{field:"TargetFilename",op:"begin with",value:"/Users/a/Library/Caches/"}],[{field:"EventType",op:"is",value:"FileDelete"}]]')
-tx() { local want=$1 name=$2 line=$3; local g=$([ "$(echo "$line" | jq -n -cR --argjson cfg "$XCFG" -f "$ROOT/src/scope.jq" | wc -l | tr -d ' ')" = 1 ] && echo KEEP || echo DROP)
+tx() { local want=$1 name=$2 line=$3; local g; g=$([ "$(echo "$line" | jq -n -cR --argjson cfg "$XCFG" -f "$ROOT/src/scope.jq" | wc -l | tr -d ' ')" = 1 ] && echo KEEP || echo DROP)
   [ "$g" = "$want" ] && { pass=$((pass+1)); printf "  ok   %-4s %s\n" $g "$name"; } || { fail=$((fail+1)); printf "  FAIL want %s got %s %s\n" $want $g "$name"; }; }
 tx DROP "[exclude] TargetFilename begin with caches" "$(newp /Users/a/Library/Caches/com.spotify.client cache.db)"
 tx KEEP "[exclude] TargetFilename leaves LaunchAgents" "$(newp /Users/a/Library/LaunchAgents com.evil.plist)"

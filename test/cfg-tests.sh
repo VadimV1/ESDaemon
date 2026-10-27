@@ -1,5 +1,6 @@
 #!/bin/bash
 # cfg-tests.sh — the cfg parser accepts what real editors produce and refuses anything it would otherwise silently ignore (so reload.sh never ships a broken or half-read filter).
+# shellcheck disable=SC2034  # variables read only in the single-quoted test strings ok() evals look unused to shellcheck
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; T="$(mktemp -d)"; pass=0; fail=0
 ok(){ if eval "$2"; then pass=$((pass+1)); echo "  ok   $1"; else fail=$((fail+1)); echo "  FAIL $1"; fi; }

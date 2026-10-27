@@ -2,6 +2,7 @@
 # control-tests.sh — the esdaemon control command: usage/exit codes, and the uninstall removal path.
 # Uninstall is exercised against a throwaway tree (ESDAEMON_BASE/LD/LOGS/SELF overridden) with launchctl
 # stubbed, so it runs on Linux or macOS without root and never touches a real install.
+# shellcheck disable=SC2034  # variables read only in the single-quoted test strings ok() evals look unused to shellcheck
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$HERE/.."; ESD="$ROOT/bin/esdaemon"
 pass=0; fail=0
