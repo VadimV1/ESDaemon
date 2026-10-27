@@ -81,6 +81,19 @@ ok 'trailing backslash in quoted arg doubled' '[ "$(cl "[\"curl\",\"a b\\\\\"]")
 ok 'lone backslash unquoted stays literal' '[ "$(cl "[\"curl\",\"c\\\\d\"]")" = "curl c\\d" ]'
 ok 'backslash before a newline not doubled' '[ "$(cl "[\"curl\",\"a b\\\\\\n\"]" | head -1)" = "curl \"a b\\" ]'
 ok 'newline arg is quoted'                '[ "$(cl "[\"curl\",\"a\\nb\"]" | head -1)" = "curl \"a" ]'
+# ca <arg>...: the CommandLine of curl run with these arguments; b <n>: n backslashes
+ca(){ cl "$(jq -cn '["curl"] + $ARGS.positional' --args "$@")"; }
+b(){ printf '%*s' "$1" '' | tr ' ' '\\'; }
+ok 'n backslashes before a quote: 2n+1, then the quote' '[ "$(ca "a$(b 2)\"b c")" = "curl \"a$(b 5)\"b c\"" ]'
+ok 'trailing backslashes of a quoted arg doubled'    '[ "$(ca "a b$(b 3)")" = "curl \"a b$(b 6)\"" ]'
+ok 'backslashes before a space untouched'            '[ "$(ca "a$(b 2) b")" = "curl \"a$(b 2) b\"" ]'
+ok 'only the run before each quote doubled'          '[ "$(ca "x$(b 2)y$(b 3)\"z w$(b 1)")" = "curl \"x$(b 2)y$(b 7)\"z w$(b 2)\"" ]'
+ok 'run at the start, before a quote'                '[ "$(ca "$(b 3)\"x y")" = "curl \"$(b 7)\"x y\"" ]'
+ok 'nothing but backslashes between two quotes'      '[ "$(ca "\"$(b 4)\"")" = "curl \"$(b 1)\"$(b 9)\"\"" ]'
+ok 'adjacent quotes, one backslash between quotes'   '[ "$(ca "a\"\"$(b 1)\"b")" = "curl \"a$(b 1)\"$(b 1)\"$(b 3)\"b\"" ]'
+ok 'long runs: 37 trailing, 100 before a quote'      '[ "$(ca "a b$(b 37)" "x$(b 100)\"y")" = "curl \"a b$(b 74)\" \"x$(b 201)\"y\"" ]'
+ok 'non-ASCII before a trailing run'                 '[ "$(ca "é 中$(b 3)")" = "curl \"é 中$(b 6)\"" ]'
+ok 'empty, quote-only and plain args side by side'   '[ "$(ca "" "\"" "a b" c)" = "curl \"\" \"$(b 1)\"\" \"a b\" c" ]'
 
 echo "-- records fit the unified log (32759-byte message limit) and stay valid JSON"
 BIG=$(jq -cn '{time:"2026-09-28T10:00:00.3Z",process:{executable:{path:"/bin/zsh"},audit_token:{pid:9,euid:501},is_platform_binary:true},
@@ -102,6 +115,13 @@ PY=$(jq -cn '{time:"t",process:{executable:{path:"/bin/zsh"},audit_token:{pid:9}
   event:{exec:{target:{executable:{path:"/bin/sh"},audit_token:{pid:9},is_platform_binary:true},args:["sh","-c",("python " * 100000)]}}}')
 t0=$SECONDS; n=$(run "$PY" | wc -l | tr -d ' '); dt=$((SECONDS - t0))
 ok "700 KB 'python python ...' argv processed in < 10 s, logged" '[ $dt -lt 10 ] && [ "$n" = 1 ]'
+# quoting an argument takes time linear in its length, whatever it holds (it grew with the square of the length)
+BS=$(echo "$PY" | jq -c '.event.exec.args = ["sh", "-c", "\\" * 65536 + "\"x", "\\" * 131072 + " x"]')
+t0=$SECONDS; R=$(run "$BS"); dt=$((SECONDS - t0))
+ok "backslash runs of 64 and 128 KB quoted in < 10 s, logged" '[ $dt -lt 10 ] && [ "$(echo "$R" | jq -r .EventType)" = ProcessStart ]'
+QS=$(echo "$PY" | jq -c '.event.exec.args = ["sh", "-c", "\"" * 131072, "x\\\\\\\"" * 65536]')
+t0=$SECONDS; R=$(run "$QS"); dt=$((SECONDS - t0))
+ok "128k quotes, and 64k backslash runs before quotes, quoted in < 10 s, logged" '[ $dt -lt 10 ] && [ "$(echo "$R" | jq -r .EventType)" = ProcessStart ]'
 # argv element count is capped (args_max) so a huge count can't stall the serial filter; the record is marked
 # 5000 args renders under record_max so the cap, not the size-cut, is what we are testing
 MANYARGS=$(jq -cn '{time:"t",process:{executable:{path:"/bin/zsh"},audit_token:{pid:9},is_platform_binary:true},

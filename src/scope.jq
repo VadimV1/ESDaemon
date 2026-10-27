@@ -76,12 +76,23 @@ def procguid($pid; $start):
 # argv is attacker-controlled and can hold hundreds of thousands of elements (within ARG_MAX ~1 MB); rendering all
 # of them (a regex test per element) stalls this serial filter for seconds, so EndpointSecurity drops real events
 # behind it. Cap the element count at args_max (0 = no cap) and mark the cut; record_max still bounds total bytes.
+# One argument can be that long too, so quoting takes time linear in its length, whatever it holds: split it at the
+# quotes, double the backslashes each part ends in (they stand before a quote), rejoin with \". No regex rewrite:
+# its time can grow with the square of the length.
 def cmdline:
+  # the backslashes a string ends in, found by halving it: if the second half is all backslashes, the run takes it
+  # whole and may go on into the first; else it lies within the second. Linear in the string's length; the first
+  # tests settle short runs at once.
+  def bs_tail: if endswith("\\") | not then "" elif endswith("\\\\") | not then "\\" elif . == "\\" * length then .
+    else (length / 2 | floor) as $h | .[$h:] as $r
+    | if $r == "\\" * ($r | length) then (.[:$h] | bs_tail) + $r else $r | bs_tail end end;
+  # join($s) without jq's join, which copies the string built so far for every element: this appends to it in place
+  # (. + $s | . + $x: written as one sum, it would be copied too)
+  def cat($s): reduce .[1:][] as $x (.[0] // ""; . + $s | . + $x);
+  def quote: "\"" + (split("\"") | map(if endswith("\\") then . + bs_tail else . end) | cat("\\\"")) + "\"";
   (if type == "array" then . else [] end) as $a | ($a | length) as $n | ($cfg.args_max // 0) as $cap
   | (if $cap > 0 and $n > $cap then $a[0:$cap] else $a end
-     | [ .[]? | tostring
-         | if length == 0 or test("[\\s\"]") then "\"" + (gsub("(?<b>\\\\*)\""; "\(.b)\(.b)\\\"") | sub("(?<b>\\\\+)\\z"; "\(.b)\(.b)")) + "\""
-           else . end ] | join(" "))
+     | map(tostring | if length == 0 or test("[\\s\"]") then quote else . end) | cat(" "))
   | if $cap > 0 and $n > $cap then . + " …[+" + (($n - $cap) | tostring) + " args]" else . end;
 # ParentCommandLine is copied into every child's event, so one long parent command inflates all its children.
 # Cap it on output only ([drop] rules still see the full value); the parent's own event keeps its full CommandLine.
