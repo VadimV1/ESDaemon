@@ -1,6 +1,7 @@
 #!/bin/bash
 # filter-tests.sh — log-all + [include]/[exclude] (Sysmon semantics) + ESDaemon never logging itself.
 # Uses the DEFAULT config (cfg text -> cfg.sh -> scope.jq), plus rules added on top.
+# shellcheck disable=SC2034  # variables read only in the single-quoted test strings ok() evals look unused to shellcheck
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; T="$(mktemp -d)"; pass=0; fail=0
 ok(){ if eval "$2"; then pass=$((pass+1)); echo "  ok   $1"; else fail=$((fail+1)); echo "  FAIL $1"; fi; }

@@ -1,5 +1,6 @@
 #!/bin/bash
 # sysmon-tests.sh — format = sysmon field mapping + format = raw pass-through (synthetic events).
+# shellcheck disable=SC2034  # variables read only in the single-quoted test strings ok() evals look unused to shellcheck
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; pass=0; fail=0
 # fixed uid map so User does not depend on the accounts of the machine running the tests

@@ -4,11 +4,13 @@
 
 ```bash
 make test     # filter, config, format and lifecycle tests; macOS or Linux, needs bash and jq
-make lint     # shell syntax, shellcheck if installed, default config parses
+make lint     # shell syntax, shellcheck, default config parses, scripts committed executable
 make build    # macOS: compile the ESDaemon binary
 ```
 
 The tests feed synthetic and real-shaped `eslogger` events through `src/scope.jq` with real configs parsed by `bin/cfg.sh`. They run in a few seconds and touch nothing on the system. Note that on a Mac where ESDaemon is installed, the test run itself is logged (it starts thousands of short processes); run them on a Mac you are not monitoring if that matters.
+
+`make lint` fails on a syntax error (`bash -n`) in any script, on any shellcheck finding at warning level or above, on a default config that does not parse, and on a script committed without its execute bit. CI's Linux job runs shellcheck 0.9.0; where shellcheck is not installed, lint says `shellcheck not installed, skipped` and runs the other checks. The execute bits are read from the git index, not from the files on disk, so a copy that lost them (ZIP download, Windows) still lints; outside a git checkout that check is skipped with a notice.
 
 ## Checking a real Mac
 

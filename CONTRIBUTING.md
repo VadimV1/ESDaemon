@@ -5,6 +5,8 @@ Thanks for helping. Issues and pull requests are welcome.
 ## Before you open a pull request
 
 - `make lint && make test` pass (macOS or Linux, needs `bash` and `jq`).
+- Scripts are shellcheck-clean: CI fails on any finding at warning level or above (`shellcheck -S warning`, version 0.9.0), and `make lint` runs the same check when `shellcheck` is installed. Fix what it finds; if a finding is wrong, disable that one check as narrowly as you can, with the reason: `# shellcheck disable=SC2034  # read by run.sh`.
+- Scripts are committed executable. On Windows, where git does not see the execute bit, add a new script with `git add --chmod=+x <file>`.
 - Every behaviour change comes with a test in `test/` that fails without it.
 - A new default `[exclude]` rule names an exact binary (and, for file events, that binary's own folder), says in a comment why it removes no investigative value, and adds a test proving that the same path written by another program, or a copy of the binary, is still logged. Include the measurement that motivated it (`measure.sh` output: records per 10 minutes, macOS version).
 - Never exclude on `CommandLine` (or another field the process chooses) alone; see [docs/CONFIG.md](docs/CONFIG.md#writing-safe-rules).

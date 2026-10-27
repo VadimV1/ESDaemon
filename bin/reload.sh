@@ -7,7 +7,7 @@ CFGF="$BASE/configs/ESDaemon.cfg"; RENDER=""
 if [ "${1:-}" = --render ]; then RENDER="${2:?output dir}"; CFGF="${3:-$CFGF}"; fi
 # bash-invoked: a GitHub tarball/ZIP (or a Windows push) may drop the execute bit on cfg.sh
 bash "$HERE/cfg.sh" "$CFGF" json >/dev/null || { echo "ESDaemon.cfg is invalid, nothing changed"; exit 1; }
-EVENTS="$(bash "$HERE/cfg.sh" "$CFGF" events)"; [ -n "$EVENTS" ] || EVENTS=exec
+EVENTS="$(bash "$HERE/cfg.sh" "$CFGF" events)"; [ -n "$EVENTS" ] || EVENTS="exec"
 SUB="$(bash "$HERE/cfg.sh" "$CFGF" get subsystem)"; CAT="$(bash "$HERE/cfg.sh" "$CFGF" get category)"
 
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT

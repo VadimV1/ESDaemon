@@ -11,7 +11,8 @@ trap 'rm -rf "$T"' EXIT
 ok(){ if eval "$2"; then pass=$((pass+1)); echo "  ok   $1"; else fail=$((fail+1)); echo "  FAIL $1"; fi; }
 command -v make >/dev/null && command -v git >/dev/null || { echo "make or git not installed, skipped"; exit 0; }
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE   # set when run from a git hook; git must only touch the throwaway repo
-# the copy as a clone gets it: its own repo, every script 100755 in the index. shellcheck is stubbed (slow, not tested here)
+# the copy as a clone gets it: its own repo, every script 100755 in the index. shellcheck is stubbed: slow, and make lint
+# runs the real one on this tree anyway; here only lint's handling of its exit status is tested
 mkdir -p "$T/clone" "$T/stub"; cp -R "$ROOT"/* "$ROOT"/.gitattributes "$ROOT"/.gitignore "$T/clone"/; printf '#!/bin/sh\n' > "$T/stub/shellcheck"; chmod +x "$T/stub/shellcheck"
 { git -C "$T/clone" init -q && git -C "$T/clone" add -A && git -C "$T/clone" add --chmod=+x -- '*.sh' bin/esdaemon; } >/dev/null 2>&1
 lint(){ (cd "$T/clone" && PATH="$T/stub:$PATH" make lint) >"$T/out" 2>&1; echo $?; }
@@ -21,6 +22,21 @@ crlf_in_git(){ local m h; m=$(git -C "$T/clone" ls-files -s "$1" | cut -c1-6)
 
 echo "-- a clone: every script committed executable"
 ok "lint passes"                                  '[ "$(lint)" = 0 ] && grep -qx "exec bits ok" "$T/out"'
+
+echo "-- a syntax error in any script or a shellcheck finding fails lint; shellcheck is skipped only when it is missing"
+cp "$T/clone/install.sh" "$T/install.sh"; echo 'if then' >> "$T/clone/install.sh"   # install.sh is checked first, not last
+ok "syntax error in install.sh fails, by name"    '[ "$(lint)" != 0 ] && grep -qx "syntax errors in: install.sh" "$T/out"'
+cp "$T/install.sh" "$T/clone/install.sh"
+printf '#!/bin/sh\necho "install.sh:1:1: warning: stub finding"\nexit 1\n' > "$T/stub/shellcheck"
+ok "shellcheck finding fails, not reported as not installed" '[ "$(lint)" != 0 ] && grep -qx "install.sh:1:1: warning: stub finding" "$T/out" && ! grep -q "not installed" "$T/out"'
+# no shellcheck on PATH: the stub removed, and a directory holding a real one (CI's Linux: /usr/bin) swapped for links to the rest of it
+rm "$T/stub/shellcheck"; nosc=""; i=0; IFS=: read -ra dirs <<< "$PATH"
+for d in "${dirs[@]}"; do
+  [ -e "$d/shellcheck" ] && { i=$((i+1)); mkdir "$T/path$i"; ln -s "$d"/* "$T/path$i"; rm "$T/path$i/shellcheck"; d="$T/path$i"; }
+  nosc="$nosc${nosc:+:}$d"
+done
+PATH="$nosc" ok "shellcheck missing: skipped with a notice, the rest still checked" '[ "$(lint)" = 0 ] && grep -qx "shellcheck not installed, skipped" "$T/out" && grep -qx "syntax ok" "$T/out" && grep -qx "exec bits ok" "$T/out"'
+printf '#!/bin/sh\n' > "$T/stub/shellcheck"; chmod +x "$T/stub/shellcheck"
 
 echo "-- a script committed without the execute bit fails lint, by name, whatever its bit on disk"
 for f in quick-install.sh bin/esdaemon redteam/lib.sh; do

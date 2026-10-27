@@ -1,6 +1,7 @@
 #!/bin/bash
 # output-tests.sh — output correctness on eslogger shapes seen on macOS 26 (key order, pidversion, exec chains) and
 # hostile input (quoting, huge argv, regex blow-up, odd events). Synthetic, modelled on real captures.
+# shellcheck disable=SC2034  # variables read only in the single-quoted test strings ok() evals look unused to shellcheck
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; pass=0; fail=0
 CFG="$("$ROOT/bin/cfg.sh" "$ROOT/configs/ESDaemon.cfg" json | jq -c '.users = {"501": "alice"}')"

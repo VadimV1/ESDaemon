@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # scenarios.sh — the emulation library. Each scenario is a documented macOS technique run through its real
 # living-off-the-land binary with a benign, self-cleaning payload. Grouped by MITRE ATT&CK tactic.
 # Sources: LOOBins (loobins.io), MITRE ATT&CK macOS, Atomic Red Team, Objective-See, SentinelOne, Jamf Threat Labs.

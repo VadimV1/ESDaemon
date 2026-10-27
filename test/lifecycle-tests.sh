@@ -1,6 +1,7 @@
 #!/bin/bash
 # lifecycle-tests.sh — what reload.sh ships to launchd and what try.sh reports. A cfg that parses must also produce a
 # daemon that starts; the FIFO must survive a reboot; drop markers must not be counted as kept events.
+# shellcheck disable=SC2034  # variables read only in the single-quoted test strings ok() evals look unused to shellcheck
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; T="$(mktemp -d)"; pass=0; fail=0
 trap 'rm -rf "$T"' EXIT
