@@ -1,6 +1,8 @@
 #!/bin/bash
 # filter.sh — ESDaemon filter job. eslogger output (FIFO) -> scope.jq (rules from ESDaemon.cfg) -> ESDaemon -> unified log.
 set -euo pipefail
+# fixed PATH: this can run as root, and macOS sudo keeps the caller's PATH — so bare tool names resolve to system binaries
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 # ESDAEMON_BASE: the tests run this job against a throwaway tree
 BASE="${ESDAEMON_BASE:-/usr/local/ESDaemon}"; RUN="$BASE/run"; FIFO="$RUN/raw.fifo"
 # the cfg reload.sh last validated: an edited-but-not-reloaded cfg must never break a restart or a reboot

@@ -13,6 +13,8 @@
 #   ./run.sh run --keep                 do not run the cleanup steps (leave artifacts for inspection)
 # Nothing here harms the machine by default: every scenario uses a harmless payload and removes what it creates.
 set -uo pipefail
+# fixed PATH: this can run as root, and macOS sudo keeps the caller's PATH — so bare tool names resolve to system binaries
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"; . "$HERE/scenarios.sh"
 SUBSYS="${ESD_RT_SUBSYS:-com.apple.eslogger}"

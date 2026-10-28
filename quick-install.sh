@@ -7,6 +7,8 @@
 #   ESDAEMON_REF    branch or tag to install (default: main)
 # Safe to re-run: an existing (tuned) config is kept, an older one is migrated, see install.sh.
 set -euo pipefail
+# fixed PATH: this can run as root, and macOS sudo keeps the caller's PATH — so bare tool names resolve to system binaries
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 DEFAULT_REPO="VadimV1/ESDaemon"          # the published owner/repo
 REPO="${ESDAEMON_REPO:-$DEFAULT_REPO}"; REF="${ESDAEMON_REF:-main}"
 

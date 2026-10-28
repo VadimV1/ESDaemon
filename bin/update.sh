@@ -7,6 +7,8 @@
 # Environment (optional): ESDAEMON_REPO (owner/repo, default: the REPO file installed next to this script),
 #   ESDAEMON_RELEASE_JSON (read the release from this file instead of the GitHub API; used by the tests).
 set -euo pipefail
+# fixed PATH: this can run as root, and macOS sudo keeps the caller's PATH — so bare tool names resolve to system binaries
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # installed copy: VERSION / REPO next to this script; from a checkout: in the repo root
 for d in "$HERE" "$HERE/.."; do [ -f "$d/VERSION" ] && { VFILE="$d/VERSION"; RFILE="$d/REPO"; break; }; done

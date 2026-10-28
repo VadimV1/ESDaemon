@@ -3,6 +3,8 @@
 # Usage: bin/try.sh <capture.ndjson> [cfg=configs/ESDaemon.cfg]
 #   capture: raw eslogger JSON, e.g. from measure.sh (it prints where it saved raw.ndjson)
 set -euo pipefail
+# fixed PATH: this can run as root, and macOS sudo keeps the caller's PATH — so bare tool names resolve to system binaries
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 HERE="$(cd "$(dirname "$0")" && pwd)"; CAP="${1:?capture.ndjson}"
 if [ -f "$HERE/scope.jq" ]; then JQF="$HERE/scope.jq"; DEF="$HERE/configs/ESDaemon.cfg"; else JQF="$HERE/../src/scope.jq"; DEF="$HERE/../configs/ESDaemon.cfg"; fi
 CFGF="${2:-$DEF}"; CFG="$("$HERE/cfg.sh" "$CFGF" json)"
