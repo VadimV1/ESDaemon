@@ -2,7 +2,7 @@
 
 The shipped config ([`configs/ESDaemon.cfg`](../configs/ESDaemon.cfg)) logs **who logged in and what ran**, and drops only collector self-noise and Apple's own housekeeping. The `file` and `system` feeds are **not developed yet** (see the note under *What it logs*).
 
-> The volume figures in this document (≈13 records per 10 minutes idle instead of ≈95, and the post-boot numbers below) were measured with an earlier default that also enabled the `file` create/delete feed. With only the `process` and `user` feeds on, idle volume is lower still; a refreshed measurement is pending. Many of the exclude rules below target file events and lie dormant while the file feed is off. The `xpcproxy` rules now also require launchd as the parent; launchd's own launches stay excluded, so the figures should not change, but that has not been measured on a Mac yet.
+> The volume figures in this document (≈13 records per 10 minutes idle instead of ≈95, and the post-boot numbers below) were measured with an earlier default that also enabled the `file` create/delete feed. With only the `process` and `user` feeds on, idle volume is lower still; a refreshed measurement is pending. Many of the exclude rules below target file events and lie dormant while the file feed is off. The `xpcproxy` rules now also require launchd as the parent, and the `eslogger` rule now drops only ESDaemon's own launchd-started eslogger daemon; launchd's own launches stay excluded, so the figures should not change, but that has not been measured on a Mac yet.
 
 ## What it logs
 
@@ -28,7 +28,7 @@ Every rule names an exact binary; the file rules also name that binary's own fol
 | Rule | Drops | Why visibility stays |
 |---|---|---|
 | `Image begin with /opt/observiq-otel-collector/`, `ParentImage begin with /opt/observiq-otel-collector/` | the Bindplane agent, the `log show` it runs every poll, and the temp files those write | collector self-noise. Without it the agent's temp files are logged, which makes it poll again at once: a loop of about one poll a second |
-| `Image is /usr/bin/eslogger` | `eslogger` launches (`eslogger --list-events` during a reload) | ESDaemon tooling. Full path only; a copy elsewhere stays logged. It also hides someone running `/usr/bin/eslogger` by hand |
+| `Image is /usr/bin/eslogger AND ParentImage is /sbin/launchd` | ESDaemon's own `eslogger` daemon (`com.esdaemon.eslogger`), started by launchd and running continuously | collector self-noise. Pinned to the launchd start (`ParentImage`), not the command line, so a manual `eslogger` run from a shell — reconnaissance a SOC may want to see — stays logged, as does a copy elsewhere. The filter's own `eslogger --list-events` is dropped as an ESDaemon process whatever its parent (built in, not this rule); a `reload.sh` run's `--list-events` is logged, like any admin action |
 | `xpcproxy` with an Apple service name (`com.apple.*`, `application.com.apple.*`), **started by launchd** (parent pid 1 from the start) | launchd's start-up step for Apple services, about half of an idle Mac's process starts | the program it starts is logged as its own record under the same process ID, with path, user and signature; only the launchd job name is lost. Third-party services' `xpcproxy` stays logged, and so does an `xpcproxy` started from a shell, app or script, whatever its arguments: the service name is an argument anyone can give it. The pin relies on how the filter decides that launchd started a process (its `ParentImage`, see [CONFIG.md](CONFIG.md#rules)). A job anyone defines with a `com.apple.` label (a LaunchAgent, `launchctl submit`) is started by launchd the same way, so its `xpcproxy` step is dropped too. That step is all the label hides: the program the job runs is treated like anything else launchd starts (logged, unless it is an Apple binary in the system folders, see **macOS's own daemons** below), and its plist in a `LaunchAgents` folder is logged when file events are on |
 | Spotlight's `mdworker_shared` (path **and** `SigningId`) | Apple's indexer workers | started by launchd with fixed arguments over and over; not user activity |
 | `contactsd` process starts | the contacts daemon starting under each Apple service account | Apple housekeeping |
@@ -55,6 +55,7 @@ The test suite (`make test`) checks that the default config **keeps**:
 - `cfprefsd` or `mobileassetd` writing a LaunchAgent
 - a copy of `cfprefsd` or `mdworker_shared` placed elsewhere, or not signed by Apple
 - a third-party service's `xpcproxy`; an `xpcproxy` given an Apple service name by a shell or script (as a user or root) or re-parented to launchd after a double fork; and a copy of `xpcproxy` placed elsewhere
+- a manual `/usr/bin/eslogger` run from a shell (only ESDaemon's own launchd-started eslogger daemon is dropped)
 - a user running `log show` (only the agent's is dropped)
 - an Apple tool started from a shell (not launchd), including one writing to `$TMPDIR`
 - launchd daemons writing a LaunchDaemon, `/Applications`, a configuration profile or the Gatekeeper/XProtect databases
