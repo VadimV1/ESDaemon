@@ -116,6 +116,15 @@ def parent_info: .__esd_parent
       else (.event.exec.target as $t
             | if $t.original_ppid != null and $t.original_ppid != $t.ppid then {}
               else (.process | {i: .executable.path}) end) end);
+# For rule matching only. A `ParentImage is /sbin/launchd` rule means launchd started this process (parent pid 1 from
+# the start). But the per-pid exec cache can report /sbin/launchd as a parent's image for a process whose parent is not
+# pid 1 -- its parent's last seen exec was /sbin/launchd, or pid 1 re-exec'd and got cached (issue #38) -- so a crafted
+# process could satisfy the rule without launchd starting it. Strip the observed /sbin/launchd for a rule ($p is the
+# process whose parentage is tested) when its parent is not launchd: ppid is not 1, or it was reparented to pid 1
+# (original_ppid present and != 1, the same "not reparented to pid 1" test parent_info's fallback uses). An absent
+# original_ppid is left as-is (a plain fork+exec from pid 1, e.g. launchd), so the observed image stands. The emitted
+# record keeps that image (it is the real parent, and ParentProcessId shows pid != 1); rules must not read launchd into it.
+def rule_pimg($p): if . == "/sbin/launchd" and ($p.ppid != 1 or (($p.original_ppid // 1) != 1)) then null else . end;
 # ES file event shapes: unlink {target, parent_dir}; create {destination: {existing_file | new_path{dir,filename}}};
 # rename {source, destination: same}; open {file}; close / attribute changes {target}. JSON key order varies,
 # so pick fields by name, never by position.
@@ -291,14 +300,14 @@ def filter_fields($ev):
   | if $ev == "exec" then
       .event.exec.target as $t | parent_info as $pi
       | { EventType: "ProcessStart", Image: $t.executable.path, CommandLine: (.__esd_cmdline // (.event.exec.args | cmdline)),
-          CurrentDirectory: .event.exec.cwd.path, ParentImage: $pi.i, ParentCommandLine: ($pi.c // null),
+          CurrentDirectory: .event.exec.cwd.path, ParentImage: ($pi.i | rule_pimg($t)), ParentCommandLine: ($pi.c // null),
           User: user_of($t.audit_token.euid), TeamId: $t.team_id, SigningId: $t.signing_id,
           IsPlatformBinary: $t.is_platform_binary }
     else
       { EventType: event_kind($ev)[0], Image: $p.executable.path, User: user_of($p.audit_token.euid),
         TeamId: $p.team_id, SigningId: $p.signing_id, IsPlatformBinary: $p.is_platform_binary,
         TargetFilename: (if is_file_kind($ev) then target_file($ev) else null end),
-        ParentImage: (.__esd_pimg // (if launchd_child(.process) then "/sbin/launchd" else null end)) }   # parent of the acting process
+        ParentImage: ((.__esd_pimg | rule_pimg($p)) // (if launchd_child($p) then "/sbin/launchd" else null end)) }   # parent of the acting process; rule_pimg: launchd only if launchd-started
     end;
 
 # Log everything, then filter like Sysmon: an empty [include] includes every event, a non-empty one only events
