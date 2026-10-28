@@ -103,6 +103,27 @@ if can $LINK "symlink inside the tree"; then ln -s /etc "$B/x"; chk
   ok "a symlink inside the tree is refused"                '[ $rc = 1 ] && has "$B/x is a symbolic link (to /etc)"'
 fi
 
+echo "-- ACLs (macOS only): an ACL that lets another user write is refused, whatever ls's +/@ marker shows"
+# ACLs are a macOS facility; Linux and this Windows host cannot set one, so they skip (not fail) — the macOS CI runners
+# run these. chmod +a sets the ACL; the tree is the test user's, so an allow for any other identity is a non-owner one.
+if [ "$(uname -s)" != Darwin ]; then
+  echo "  skip: ACLs are a macOS facility (the macOS CI runners run these)"
+else
+  AU=daemon   # uid 1: present on every macOS, and never the test user who owns the tree
+  new acl; chmod +a "$AU allow add_file,delete_child" "$B/configs"; chk; printf -v q '%q' "$B/configs"
+  ok "an ACL granting a non-owner write is refused, with the fix" \
+     '[ $rc = 1 ] && has "$B/configs is writable via an ACL by someone other than uid $ME" && has "fix: sudo chmod -N $q"'
+  new aclx; chmod +a "$AU allow add_file,delete_child" "$B/configs"; xattr -w com.esdaemon.test 1 "$B/configs"; chk
+  ok "an xattr makes ls show @, hiding the ACL's + marker"   'case "$(ls -ld "$B/configs")" in "drwxr-xr-x@"*) true ;; *) false ;; esac'
+  ok "...the ACL is still refused (read with ls -le, not the marker)" '[ $rc = 1 ] && has "$B/configs is writable via an ACL"'
+  new aclabove; chmod +a "$AU allow add_file,delete_child" "$TOP/usr/local"; chk
+  ok "an ACL on a directory above the tree is refused too"   '[ $rc = 1 ] && has "$TOP/usr/local is writable via an ACL"'
+  new aclowner; chmod +a "$(id -un) allow add_file,delete_child" "$B/configs"; chk
+  ok "an allow entry for the owner itself still passes"      '[ $rc = 0 ] && [ -z "$out" ]'
+  new aclnone; chk
+  ok "a tree with no ACL still passes (stock macOS)"         '[ $rc = 0 ] && [ -z "$out" ]'
+fi
+
 echo "-- names as they are: a space in a path, a fix quoted for the shell, no relative or empty path"
 new "with space"; chk "$OTHER"; printf -v q '%q' "$TOP/usr/local"
 ok "names the path, quotes the fix"                        '[ $rc = 1 ] && has "$TOP/usr/local is owned by uid $ME" && has "fix: sudo chown $OTHER $q"'
