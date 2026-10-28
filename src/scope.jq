@@ -154,11 +154,11 @@ def wanted($ev):
   else true end;
 # event payload without the bulky stat blocks, for records that carry it as Detail
 def detail($ev): .event[$ev] | walk(if type == "object" then del(.stat) else . end);
-# Field order of every sysmon record, read top-down: what happened, who ran what, the process, its parent and
-# lineage, then code-signing identity. Keys not listed keep their place after these.
+# Field order of every sysmon record, read top-down: what happened (and its number, in sysmon+extras), who ran what,
+# the process, its parent and lineage, then code-signing identity. Keys not listed keep their place after these.
 def field_order:
   . as $o
-  | ["EventID","EventType","UtcTime",
+  | ["EventID","EventType","UtcTime","GlobalSeqNum",
      "User","Image","CommandLine","CurrentDirectory","TargetFilename","SourceFilename",
      "TargetImage","TargetProcessId","ExitStatus",
      "ProcessId","ProcessGuid",
@@ -169,9 +169,13 @@ def field_order:
     + ($o | with_entries(select(.key as $f | $k | index([$f]) | not)));
 # Only fields that carry information: no constant Channel, no Uid beside User, OriginalParentProcessId only when it
 # differs from ParentProcessId. EventType stays beside EventID (readable name for the number).
+# GlobalSeqNum (sysmon+extras): EndpointSecurity's number for the event, the global_seq_num slim and raw keep. It puts
+# one eslogger run's records in order and tells a repeated record from a new one. It is no loss counter: events the
+# filter leaves out use up numbers too, so records skip numbers all the time (the heartbeat's count shows loss).
 def sysmon($ev):
   .time as $t | .process as $p | event_kind($ev) as $kind |
-  { EventID: $kind[1], EventType: $kind[0], UtcTime: ($t | sysmon_time) } +
+  { EventID: $kind[1], EventType: $kind[0], UtcTime: ($t | sysmon_time),
+    GlobalSeqNum: (if $cfg.format == "sysmon+extras" then .global_seq_num else null end) } +
   ( if $ev == "exec" then
       .event.exec as $x | $x.target as $tg | parent_info as $pi |
       { ProcessGuid: procguid($tg.audit_token.pid; $p.start_time // $t),
@@ -230,8 +234,10 @@ def fit($max):
         | ((($b.n - ($sz - $max) - 256) / $b.n * $len) | floor | if . < 0 then 0 else . end) as $keep
         | $r | setpath($b.p; getpath($b.p) | cut_mid(if $keep >= $len then $len - 1 else $keep end)) end
       end)))
+    # still too big: a marker in its place names the event with the record's own fields, its number among them
     | if size <= $max then . else {esd_record_too_large: (tojson | utf8bytelength), time: .time, UtcTime: .UtcTime,
-        EventID: .EventID, Image: .Image} | with_entries(select(.value != null)) end
+        EventID: .EventID, GlobalSeqNum: .GlobalSeqNum, global_seq_num: .global_seq_num, Image: .Image}
+        | with_entries(select(.value != null)) end
   end;
 
 # $rule_error: null, or why a rule could not be evaluated on this event (see verdict). It goes in before fit, so the
@@ -322,15 +328,15 @@ def decide:
     end;
 
 # No record could be built for this event (a malformed event, or a bug): the marker written in its place still names
-# it, by EventKind (the eslogger event), User, Image and ProcessId of the process the record is about, each read on its
-# own so one bad field cannot take the others with it. In the sysmon formats it carries the Sysmon envelope, as the
-# gap marker does (255 is Sysmon's error event).
+# it, by EventKind (the eslogger event), GlobalSeqNum (eslogger's number for it, in every format), User, Image and
+# ProcessId of the process the record is about, each read on its own so one bad field cannot take the others with it.
+# In the sysmon formats it carries the Sysmon envelope, as the gap marker does (255 is Sysmon's error event).
 def filter_error($x):
   tostring as $err | (try ($x.event | keys[0]) catch null) as $ev
   | def of_proc(f): try (if $ev == "exec" then $x.event.exec.target else $x.process end | f) catch null;
   (if ($cfg.format | startswith("sysmon")) then
      {EventID: 255, EventType: "esd_filter_error", UtcTime: (try ($x.time | sysmon_time) catch null)} else {} end)
-  + {esd_filter_error: $err, time: $x.time, EventKind: $ev,
+  + {esd_filter_error: $err, time: $x.time, EventKind: $ev, GlobalSeqNum: $x.global_seq_num,
      User: of_proc(user_of(.audit_token.euid)), Image: of_proc(.executable.path), ProcessId: of_proc(.audit_token.pid)}
   | with_entries(select(.value != null));
 
