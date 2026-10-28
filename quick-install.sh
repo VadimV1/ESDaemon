@@ -37,14 +37,17 @@ fi
 # the checkout names its own repo (REPO file), so a clone needs no environment variable
 if [ "$REPO" = "OWNER/ESDaemon" ] && [ -f "$SRC/REPO" ]; then REPO="$(tr -d ' \r\n' < "$SRC/REPO")"; fi
 
-# 2. binary: a prebuilt release asset, else build it (Xcode Command Line Tools)
+# 2. binary: a prebuilt release asset, else build it (Xcode Command Line Tools). Either way install.sh then ad-hoc
+#    signs the binary, runs codesign --verify --strict on the result, and checks it can run on this Mac's
+#    architecture before the daemons are started onto it — see install.sh. The sha256 below is fetched from the
+#    same origin as the binary, so it confirms the download is intact (transit integrity), not that it is authentic.
 if [ ! -x "$SRC/build/ESDaemon" ]; then
   mkdir -p "$SRC/build"
   REL="https://github.com/$REPO/releases/latest/download"
   if [ "$REPO" != "OWNER/ESDaemon" ] && curl -fsSL -o "$SRC/build/ESDaemon" "$REL/ESDaemon-macos-universal" 2>/dev/null \
      && WANT="$(curl -fsSL "$REL/ESDaemon-macos-universal.sha256" 2>/dev/null | awk '{print $1}')" \
      && [ -n "$WANT" ] && [ "$(shasum -a 256 "$SRC/build/ESDaemon" | awk '{print $1}')" = "$WANT" ]; then
-    chmod 755 "$SRC/build/ESDaemon"; say "using the prebuilt release binary (sha256 verified)"
+    chmod 755 "$SRC/build/ESDaemon"; say "using the prebuilt release binary (sha256 matches; install.sh verifies its signature and architecture)"
   elif command -v swiftc >/dev/null 2>&1 && swiftc --version >/dev/null 2>&1; then
     rm -f "$SRC/build/ESDaemon"; say "building ESDaemon (swiftc)"
     swiftc -O -o "$SRC/build/ESDaemon" "$SRC/src/ESDaemon.swift"

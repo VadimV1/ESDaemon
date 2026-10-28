@@ -31,6 +31,8 @@ curl -fsSL https://raw.githubusercontent.com/<owner>/ESDaemon/main/quick-install
 
 `quick-install.sh` checks the macOS version, gets the source, uses the prebuilt release binary or builds one, runs `install.sh`, and then checks that events arrive. `install.sh` validates the config, and runs the filter with it on this Mac's jq, before it changes anything; it never overwrites a config you have edited, and migrates a config from an older version (keeping the old file next to it).
 
+**What the install verifies about the binary.** Whether the `ESDaemon` writer is the prebuilt release binary (built by `make build` or downloaded by `quick-install.sh`) or one built from source here, `install.sh` ad-hoc signs it, runs `codesign --verify --strict` on the result, and checks it can run on this Mac's architecture (a universal binary, or one matching the host) before it swaps it into place and starts the daemons. If signing or verification fails, or the binary cannot run here, the install stops, changes nothing, and leaves any previously installed binary in place. The signature is **ad-hoc** (`codesign -s -`), **not** a Developer ID signature, and the binary is **not notarized** yet; the broader supply-chain trust model is covered in [SECURITY.md](../SECURITY.md). (For a downloaded release binary the `.sha256` sits beside it on the same server, so it confirms the download is intact in transit, not that it is authentic — the signature verification above is what checks the binary itself.)
+
 What lands on the Mac:
 
 | Path | What |
