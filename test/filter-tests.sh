@@ -37,6 +37,20 @@ MDW=/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Meta
 ok "Apple xpcproxy (com.apple.*) excluded by default"          '[ "$(L com.apple.xpc.proxy /usr/libexec/xpcproxy "[\"xpcproxy\",\"com.apple.contactsd\"]" | n)" = 0 ]'
 ok "Apple app xpcproxy (application.com.apple.*) excluded"     '[ "$(L com.apple.xpc.proxy /usr/libexec/xpcproxy "[\"xpcproxy\",\"application.com.apple.Terminal.1.2\"]" | n)" = 0 ]'
 ok "third-party service xpcproxy still logged"                 '[ "$(L com.apple.xpc.proxy /usr/libexec/xpcproxy "[\"xpcproxy\",\"com.corp.agent\"]" | n)" = 1 ]'
+# XP <parent image> <ppid> <original_ppid> <euid> <args json> [image]: an xpcproxy launch. Anyone can give it an Apple
+# service name; only launchd starting it (ppid 1 and original_ppid 1) makes it launchd's start-up step, whoever it runs
+# as. XU: the default config with a fixed uid map, so User is root, a user or a service account on any test machine.
+XP(){ jq -cn --arg pi "$1" --argjson pp "$2" --argjson op "$3" --argjson u "$4" --argjson a "$5" --arg i "${6:-/usr/libexec/xpcproxy}" '{time:"t",process:{executable:{path:$pi},is_platform_binary:true,audit_token:{pid:90,euid:0}},event:{exec:{target:{executable:{path:$i},signing_id:"com.apple.xpc.proxy",is_platform_binary:true,audit_token:{pid:90,euid:$u},ppid:$pp,original_ppid:$op},args:$a}}}'; }
+XU="$(echo "$DEF" | jq -c '.users += {"0": "root", "501": "alice", "205": "_locationd"}')"
+ok "launchd's Apple xpcproxy as root: dropped"                       '[ "$(XP /sbin/launchd 1 1 0 "[\"xpcproxy\",\"com.apple.securityd\"]" | n "$XU")" = 0 ]'
+ok "launchd's Apple xpcproxy as the logged-in user: dropped"         '[ "$(XP /sbin/launchd 1 1 501 "[\"xpcproxy\",\"com.apple.cloudd\"]" | n "$XU")" = 0 ]'
+ok "launchd's Apple xpcproxy as a service account: dropped"          '[ "$(XP /sbin/launchd 1 1 205 "[\"xpcproxy\",\"com.apple.locationd\"]" | n "$XU")" = 0 ]'
+ok "launchd's Apple app xpcproxy (application.com.apple.*): dropped" '[ "$(XP /sbin/launchd 1 1 501 "[\"xpcproxy\",\"application.com.apple.Safari.1.2\"]" | n "$XU")" = 0 ]'
+ok "xpcproxy com.apple.* run from zsh by a user: logged"             '[ "$(XP /bin/zsh 4100 4100 501 "[\"xpcproxy\",\"com.apple.x\"]" | n "$XU")" = 1 ]'
+ok "xpcproxy com.apple.* run from zsh as root: logged"               '[ "$(XP /bin/zsh 4100 4100 0 "[\"xpcproxy\",\"com.apple.x\"]" | n "$XU")" = 1 ]'
+ok "xpcproxy application.com.apple.* run by a script: logged"        '[ "$( { ev /bin/zsh /bin/bash "[\"bash\",\"run.sh\"]"; XP /bin/bash 8 8 501 "[\"xpcproxy\",\"application.com.apple.x.1.2\"]"; } | jq -n -cR --argjson cfg "$XU" -f "$ROOT/src/scope.jq" | jq -r .Image | tr "\n" " ")" = "/bin/bash /usr/libexec/xpcproxy " ]'
+ok "xpcproxy com.apple.* re-parented to pid 1 (double fork): logged" '[ "$(XP /bin/zsh 1 4100 501 "[\"xpcproxy\",\"com.apple.x\"]" | n "$XU")" = 1 ]'
+ok "xpcproxy copied elsewhere, Apple name, from launchd: logged"     '[ "$(XP /usr/libexec/xpcproxy 1 1 501 "[\"xpcproxy\",\"com.apple.x\"]" /tmp/xpcproxy | n "$XU")" = 1 ]'
 ok "Spotlight worker excluded by default"                      '[ "$(L com.apple.mdworker_shared "$MDW" "[\"mdworker_shared\",\"-s\",\"mdworker\"]" | n)" = 0 ]'
 ok "mdworker_shared copied elsewhere still logged"             '[ "$(L com.apple.mdworker_shared /tmp/mdworker_shared "[\"x\"]" | n)" = 1 ]'
 ok "non-Apple binary at the mdworker_shared path still logged"   '[ "$(S "$MDW" 1 1 false | n)" = 1 ]'
