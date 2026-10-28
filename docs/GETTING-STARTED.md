@@ -6,7 +6,7 @@ From a clean Mac to ESDaemon events in your SIEM. About 10 minutes for one Mac.
 
 | Need | Why |
 |---|---|
-| macOS 15 or later (Apple silicon or Intel) | ESDaemon's filter uses `/usr/bin/jq`, which ships with macOS 15 |
+| macOS 15.0 or later (Apple silicon or Intel), with the `/usr/bin/jq` that comes with it | ESDaemon's filter runs on it. Tested with `jq-1.7.1-apple` on macOS 15.7 and 26; earlier macOS 15 releases, whose jq may be older, are not tested. The installer runs the filter on this Mac's jq first, and stops without changing anything if it cannot |
 | Admin rights (`sudo`) | it installs two LaunchDaemons |
 | Only root can write to `/usr/local` and the directories above it (the macOS default) | the daemons run as root from `/usr/local/ESDaemon`; the installer checks this and stops if another user could change the install tree or a directory above it |
 | Xcode Command Line Tools (`xcode-select --install`) | only to build the small `ESDaemon` binary; not needed with a prebuilt release binary |
@@ -29,7 +29,7 @@ Without a checkout:
 curl -fsSL https://raw.githubusercontent.com/<owner>/ESDaemon/main/quick-install.sh | sudo bash
 ```
 
-`quick-install.sh` checks the macOS version, gets the source, uses the prebuilt release binary or builds one, runs `install.sh`, and then checks that events arrive. `install.sh` validates the config before it changes anything, never overwrites a config you have edited, and migrates a config from an older version (keeping the old file next to it).
+`quick-install.sh` checks the macOS version, gets the source, uses the prebuilt release binary or builds one, runs `install.sh`, and then checks that events arrive. `install.sh` validates the config, and runs the filter with it on this Mac's jq, before it changes anything; it never overwrites a config you have edited, and migrates a config from an older version (keeping the old file next to it).
 
 What lands on the Mac:
 
@@ -137,6 +137,7 @@ The `esdaemon` command removes everything it installed, itself included — noth
 | Daemons not running | `sudo launchctl print system/com.esdaemon.eslogger \| grep -E 'state\|last exit'`, same for `com.esdaemon.filter`; then `cat /var/log/ESDaemon/filter.stderr` |
 | `reload.sh` refuses the config | it prints the line and the reason; nothing was changed. Fix the line and run it again |
 | `install.sh` or `reload.sh` stops: "… is owned by uid …", "… is group-writable", "… is a symbolic link" | another user could change the install tree or a directory above it. Run the `fix:` command printed for each path, then run it again. If another user could write there before, remove ESDaemon with `uninstall.sh` and install it again |
+| `install.sh` or `reload.sh` stops: "… cannot run ESDaemon's filter …" | this Mac's `/usr/bin/jq` could not run the filter with the config. Nothing was changed: an earlier install and its daemons stay as they were. Report it with the lines it printed (jq's version and error) and `sw_vers -productVersion` |
 | `esdaemon status` says `UNSAFE` (exit 1) | the same, found after the install: fix each path it lists. For `command … UNSAFE`, delete `/usr/local/bin/esdaemon` and use `sudo /usr/local/ESDaemon/bin/esdaemon` |
 | `esdaemon: command not found` | an Intel Mac with Homebrew: use `sudo /usr/local/ESDaemon/bin/esdaemon` (step 1) |
 | Records cut off or not valid JSON | a custom `subsystem` / `category`: `reload.sh` turns on large messages for it; keep `record_max` at or below 32000 |

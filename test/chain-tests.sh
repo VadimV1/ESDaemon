@@ -138,9 +138,9 @@ eval "$(sed -n '/^install_files() {$/,/^}$/p' "$ROOT/install.sh")"
 mkdir -p "$T/isrc/build"; cp -R "$ROOT/bin" "$ROOT/src" "$ROOT/configs" "$ROOT/VERSION" "$ROOT/REPO" "$T/isrc/"
 printf '#!/bin/sh\n# the ESDaemon writer\n' > "$T/isrc/build/ESDaemon"; chmod 755 "$T/isrc/build/ESDaemon"   # #!: executable on Git Bash too
 # what goes into the tree, as <file in the checkout>:<path in the tree>
-PAIRS="bin/chain.sh:chain.sh bin/cfg.sh:cfg.sh bin/filter.sh:filter.sh bin/measure.sh:measure.sh bin/reload.sh:reload.sh
-  bin/try.sh:try.sh bin/update.sh:update.sh bin/esdaemon:bin/esdaemon VERSION:VERSION REPO:REPO src/scope.jq:scope.jq
-  src/ESDaemon.swift:ESDaemon.swift configs/ESDaemon.cfg:configs/ESDaemon.cfg build/ESDaemon:ESDaemon"
+PAIRS="bin/chain.sh:chain.sh bin/cfg.sh:cfg.sh bin/filter.sh:filter.sh bin/jqcheck.sh:jqcheck.sh bin/measure.sh:measure.sh
+  bin/reload.sh:reload.sh bin/try.sh:try.sh bin/update.sh:update.sh bin/esdaemon:bin/esdaemon VERSION:VERSION REPO:REPO
+  src/scope.jq:scope.jq src/ESDaemon.swift:ESDaemon.swift configs/ESDaemon.cfg:configs/ESDaemon.cfg build/ESDaemon:ESDaemon"
 NFILES="$(printf '%s\n' $PAIRS | grep -c .)"
 copies(){ local p; for p in $PAIRS; do cmp -s "$T/isrc/${p%%:*}" "$B/${p#*:}" || return 1; done; }
 lay(){ TOP="$T/$1/top"; B="$TOP/usr/local/ESDaemon"; BIN="$TOP/usr/local/bin"; mkdir -p "$TOP/usr/local"; }
