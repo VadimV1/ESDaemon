@@ -7,10 +7,12 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$HERE/.."; ESD="$ROOT/bin/esdaemon"
 pass=0; fail=0
 ok(){ if eval "$2"; then pass=$((pass+1)); echo "  ok   $1"; else fail=$((fail+1)); echo "  FAIL $1"; fi; }
+trees=()   # every throwaway tree new_tree makes, removed on exit even if a section exits before its own rm
+trap '[ "${#trees[@]}" -gt 0 ] && rm -rf "${trees[@]}"' EXIT
 
 # a throwaway install tree + a launchctl stub that records what it was asked to bootout
 new_tree(){
-  T="$(mktemp -d)"
+  T="$(mktemp -d)"; trees+=("$T")
   mkdir -p "$T/base/configs" "$T/ld" "$T/logs" "$T/bin"
   printf '0.1.0\n' > "$T/base/VERSION"
   printf 'process = start\n' > "$T/base/configs/ESDaemon.cfg"

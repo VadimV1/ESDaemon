@@ -2,7 +2,7 @@
 # drop-tests.sh — [drop] (= [exclude]) syntax end to end: cfg text -> cfg.sh -> scope.jq, plus parser error cases.
 # shellcheck disable=SC2034  # variables read only in the single-quoted test strings ok() evals look unused to shellcheck
 set -uo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; T="$(mktemp -d)"; pass=0; fail=0
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT; pass=0; fail=0
 ok(){ if eval "$2"; then pass=$((pass+1)); echo "  ok   $1"; else fail=$((fail+1)); echo "  FAIL $1"; fi; }
 # base cfg = default cfg + the [drop] rules below
 { cat "$ROOT/configs/ESDaemon.cfg"; cat <<'R'
