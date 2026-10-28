@@ -6,6 +6,8 @@ set -euo pipefail
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 HERE="$(cd "$(dirname "$0")" && pwd)"; BASE=/usr/local/ESDaemon; RUN="$BASE/run"; FIFO="$RUN/raw.fifo"; LD=/Library/LaunchDaemons
 CFGF="$BASE/configs/ESDaemon.cfg"; RENDER=""
+LOGDIR=/var/log/ESDaemon; ES_ERR="$LOGDIR/eslogger.stderr"; FLT_ERR="$LOGDIR/filter.stderr"
+NSL_DIR=/etc/newsyslog.d; NSL_CONF=com.esdaemon.conf; NSL="$NSL_DIR/$NSL_CONF"   # stderr-rotation config (issue #9)
 if [ "${1:-}" = --render ]; then RENDER="${2:?output dir}"; CFGF="${3:-$CFGF}"; fi
 # Restarting the root daemons on files another user could have changed would run that user's code as root: stop first
 # unless only root can change $BASE, what is in it and every directory above it (chain.sh). --render changes nothing.
@@ -27,7 +29,7 @@ cat > "$T/com.esdaemon.eslogger.plist" <<P
   <key>Label</key><string>com.esdaemon.eslogger</string>
   <key>ProgramArguments</key><array><string>/usr/bin/eslogger</string>$ARGS</array>
   <key>StandardOutPath</key><string>$FIFO</string>
-  <key>StandardErrorPath</key><string>/var/log/ESDaemon/eslogger.stderr</string>
+  <key>StandardErrorPath</key><string>$ES_ERR</string>
   <key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>ThrottleInterval</key><integer>10</integer>
 </dict></plist>
 P
@@ -37,12 +39,23 @@ cat > "$T/com.esdaemon.filter.plist" <<P
 <plist version="1.0"><dict>
   <key>Label</key><string>com.esdaemon.filter</string>
   <key>ProgramArguments</key><array><string>$BASE/filter.sh</string></array>
-  <key>StandardErrorPath</key><string>/var/log/ESDaemon/filter.stderr</string>
+  <key>StandardErrorPath</key><string>$FLT_ERR</string>
   <key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>ThrottleInterval</key><integer>5</integer>
 </dict></plist>
 P
+# issue #9: launchd appends each daemon's stderr to these files forever, so a crash-looping daemon — eslogger
+# restarts every ThrottleInterval seconds and writes to stderr on each restart — can fill the disk. A newsyslog
+# config rotates them by size, keeping recent archives, so they stay bounded while the newest lines are kept.
+# Staged here so --render can emit it too; only the non-render path below installs it under /etc (root-only).
+cat > "$T/$NSL_CONF" <<NSLP
+# $NSL_CONF — bound ESDaemon's daemon stderr logs so a crash-looping daemon cannot fill the disk (issue #9).
+# Installed by reload.sh; removed by 'esdaemon uninstall' and uninstall.sh. Validate: newsyslog -n -f <file>
+# logfile  owner:group  mode  count  size(KB)  when  flags   (N: no process to signal; launchd reopens on respawn)
+$ES_ERR  root:wheel  644  5  1000  *  N
+$FLT_ERR  root:wheel  644  5  1000  *  N
+NSLP
 if command -v plutil >/dev/null; then plutil -lint -s "$T"/*.plist || { echo "generated plist is invalid, nothing changed"; exit 1; }; fi
-if [ -n "$RENDER" ]; then cp "$T"/*.plist "$RENDER/"; exit 0; fi
+if [ -n "$RENDER" ]; then cp "$T"/*.plist "$T/$NSL_CONF" "$RENDER/"; exit 0; fi
 
 # The filter restarts below with this cfg. On a jq that cannot run it, it would restart every few seconds and collect
 # nothing, where the one running now may still work: check first, on this Mac's jq (macOS updates replace it), with the
@@ -58,7 +71,10 @@ if [ -n "$SUB" ] && { [ "$SUB" != com.apple.eslogger ] || [ "${CAT:-events}" != 
 fi
 
 # FIFO lives under $BASE, not /var/run: /var/run is wiped at boot and launchd would recreate the path as a regular file
-install -d -o root -g wheel -m 700 "$RUN" /var/log/ESDaemon
+install -d -o root -g wheel -m 700 "$RUN" "$LOGDIR"
+# install the stderr-rotation config (issue #9); /etc/newsyslog.d exists on macOS, create it if it does not
+[ -d "$NSL_DIR" ] || install -d -o root -g wheel -m 755 "$NSL_DIR"
+install -o root -g wheel -m 644 "$T/$NSL_CONF" "$NSL"
 [ -p "$FIFO" ] || { rm -f "$FIFO"; mkfifo -m 600 "$FIFO"; }
 rm -rf /var/run/ESDaemon   # old location
 install -o root -g wheel -m 644 "$CFGF" "$RUN/active.cfg"   # what filter.sh runs with, until the next reload

@@ -22,6 +22,7 @@ LOGS="${ESDAEMON_LOGS:-/var/log/ESDaemon}"
 SELF="${ESDAEMON_SELF:-/usr/local/bin/esdaemon}"
 LAUNCHCTL="${ESDAEMON_LAUNCHCTL:-launchctl}"
 LOGBIN="${ESDAEMON_LOG:-/usr/bin/log}"
+NEWSYSLOG="${ESDAEMON_NEWSYSLOG:-/etc/newsyslog.d/com.esdaemon.conf}"   # stderr-rotation config (issue #9)
 
 # Real actions on the real install require root. A test pointed at a throwaway BASE does not.
 need_root() {
@@ -97,6 +98,7 @@ case "$cmd" in
       "$LAUNCHCTL" bootout "system/com.esdaemon.$j" 2>/dev/null && echo "stopped com.esdaemon.$j"
       rm -f "$LD/com.esdaemon.$j.plist"
     done
+    if [ -e "$NEWSYSLOG" ]; then rm -f "$NEWSYSLOG" && echo "removed $NEWSYSLOG"; fi   # the stderr-rotation config (issue #9)
     if [ $purge = 0 ] && [ -f "$BASE/configs/ESDaemon.cfg" ]; then
       [ -d "$LOGS" ] || install -d -m 700 "$LOGS" 2>/dev/null || mkdir -p "$LOGS"
       cp "$BASE/configs/ESDaemon.cfg" "$LOGS/ESDaemon.cfg.uninstalled" \
