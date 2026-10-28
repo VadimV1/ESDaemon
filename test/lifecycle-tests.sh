@@ -32,7 +32,7 @@ printf '[modules]\nfile = read<x\n' > "$T/bad.cfg"
 ok "bad cfg: render refuses, writes nothing"      '! "$ROOT/bin/reload.sh" --render "$T/bad" "$T/bad.cfg" >/dev/null 2>&1 && [ -z "$(ls "$T/bad")" ]'
 ok "filter runs the cfg reload.sh validated"      'grep -q "CFGF=\"\$RUN/active.cfg\"" "$ROOT/bin/filter.sh" && grep -q "\$RUN/active.cfg\"" "$ROOT/bin/reload.sh"'
 
-echo "-- filter.sh hands the writer [settings] heartbeat and the format; its input is the marker and jq's records only"
+echo "-- filter.sh hands the writer the format; its input is the marker and jq's records only"
 # The job run in a throwaway tree laid out as install.sh does (ESDAEMON_BASE): the real cfg.sh and scope.jq, the FIFO,
 # and a stub ESDaemon that keeps its arguments and its input. One exec event goes into the FIFO, which then closes
 # (eslogger exiting), so the job runs to its end.
@@ -49,14 +49,14 @@ if [ -x /usr/bin/jq ]; then
 printf '%s\n' "\$@" > "$T/args"; cat > "$T/in"
 STUB
   chmod +x "$T/base/ESDaemon"
-  ok "default cfg: heartbeat 300 and format sysmon+extras" '[ "$(job "$ROOT/configs/ESDaemon.cfg")" = "com.apple.eslogger events 300 sysmon+extras " ]'
+  ok "default cfg: format sysmon+extras handed over" '[ "$(job "$ROOT/configs/ESDaemon.cfg")" = "com.apple.eslogger events sysmon+extras " ]'
   ok "writer input: the restart marker, then the event's record" '[ "$(jq -c "[.eslogger_scoped_restart, .Image]" "$T/in" | tr "\n" " ")" = "[1,null] [null,\"/usr/bin/curl\"] " ]'
-  printf '[settings]\nheartbeat = 0\nformat = slim\n' > "$T/h0.cfg"
-  ok "heartbeat = 0 handed over as 0 (off)"         '[ "$(job "$T/h0.cfg")" = "com.apple.eslogger events 0 slim " ]'
+  printf '[settings]\nformat = slim\n' > "$T/h0.cfg"
+  ok "explicit format = slim handed over"           '[ "$(job "$T/h0.cfg")" = "com.apple.eslogger events slim " ]'
   printf '[settings]\nsubsystem = com.corp.esd\n' > "$T/hn.cfg"
-  ok "no heartbeat setting: 300, the default"       '[ "$(job "$T/hn.cfg")" = "com.corp.esd events 300 slim " ]'
-  printf '[settings]\nslim = false\nheartbeat = 60\n' > "$T/hr.cfg"
-  ok "legacy slim = false: the format handed over is raw" '[ "$(job "$T/hr.cfg")" = "com.apple.eslogger events 60 raw " ]'
+  ok "custom subsystem; format defaults to slim"    '[ "$(job "$T/hn.cfg")" = "com.corp.esd events slim " ]'
+  printf '[settings]\nslim = false\n' > "$T/hr.cfg"
+  ok "legacy slim = false: the format handed over is raw" '[ "$(job "$T/hr.cfg")" = "com.apple.eslogger events raw " ]'
 else
   echo "  skipped: no /usr/bin/jq, which the job runs"
 fi

@@ -92,12 +92,7 @@ In the collector the body is the full `log show` line; ESDaemon's record is its 
 
 ### Alert when a Mac goes silent
 
-A Mac whose pipeline has stopped sends nothing, just like a quiet Mac. So ESDaemon also logs a heartbeat every 5 minutes, `{"eslogger_scoped_heartbeat":300,"time":"…","records":42}`, with the number of records written since the previous one (`heartbeat` in `[settings]`, `0` = off). Set up two alerts per Mac:
-
-- **No heartbeat for more than two intervals** (alert at 11 minutes): the pipeline is down. The filter is stopped or keeps restarting, or the writer, the unified log or the collector is stuck. A Mac that is asleep or shut down sends none either.
-- **Heartbeats, but no `ProcessStart` for two intervals:** eslogger is down or lost Full Disk Access.
-
-The record's fields, its Sysmon form and what to check for each alert: [CONFIG.md](CONFIG.md#heartbeat).
+A Mac whose pipeline has stopped sends nothing, just like a quiet Mac. ESDaemon emits no heartbeat to tell them apart — a liveness record would land in the same event stream your collector parses. Detect a silent host at the collector/SIEM instead: alert when a host sends no events for N minutes (the log-source-health alert every SIEM has). Pick N from the host's normal idle floor — even an idle Mac logs some `ProcessStart` records — so a host that was reporting and then goes quiet longer than it ever does when idle has a stopped filter or eslogger, a lost Full Disk Access, a powered-off Mac, or a stuck collector. See [CONFIG.md](CONFIG.md#pipeline-liveness).
 
 ## 6. Tune what is logged
 
@@ -147,5 +142,4 @@ The `esdaemon` command removes everything it installed, itself included — noth
 | A burst of old records after a reboot | the collector replaying `max_log_age` of history on startup: set it to 1 hour (step 5) |
 | `eslogger_scoped_gap` records | Endpoint Security dropped events because the reader fell behind (very high load); the record says how many, and `after_global_seq_num` is the `GlobalSeqNum` of the last event before them |
 | `eslogger_scoped_restart` records | the filter restarted (reload, crash, boot). When eslogger restarted with it, events during the restart are not seen and `GlobalSeqNum` starts over; a reload that leaves `[modules]` alone restarts only the filter, and the numbers go on |
-| `GlobalSeqNum` skips numbers from one record to the next | normal: events the filter leaves out (`[exclude]` rules, ESDaemon's own processes) use up numbers too. Loss shows elsewhere: as `eslogger_scoped_gap` records, or as fewer records arriving between two heartbeats than the second one's `records` ([CONFIG.md](CONFIG.md#event-numbers)) |
-| No `eslogger_scoped_heartbeat` records | the filter or the collector is down, or `heartbeat = 0`: check that both daemons run (above), then the collector; see [CONFIG.md](CONFIG.md#heartbeat) |
+| `GlobalSeqNum` skips numbers from one record to the next | normal: events the filter leaves out (`[exclude]` rules, ESDaemon's own processes) use up numbers too. Loss shows as `eslogger_scoped_gap` records, or is caught by collector-side log-source monitoring ([CONFIG.md](CONFIG.md#event-numbers)) |
