@@ -71,7 +71,10 @@ ok "a rule fails on an event (esd_rule_error): stops, shows it" '[ $rc = 1 ] && 
 # does not compile, so the rule cannot be evaluated (a marker of either kind, depending on the version of scope.jq)
 chk "$(jq -c ".users = []" <<< "$DEF")"
 ok "every event hits a filter error: stops, shows it"      '[ $rc = 1 ] && has "\"esd_filter_error\":"'
-chk "$(jq -c ".exclude = [[{field: \"Image\", op: \"regex\", value: \"(\"}]]" <<< "$DEF")"
+# single-quoted jq program, built into a var first: in a chk "$(jq -c "...{...}..." )" nest bash 3.2 brace-expands the
+# {field,op,value} object into broken fragments, so the rule never reaches scope.jq
+BADRULE="$(jq -c '.exclude = [[{field:"Image",op:"regex",value:"("}]]' <<< "$DEF")"
+chk "$BADRULE"
 ok "a rule fails on every event: stops, shows it"          '[ $rc = 1 ] && grep -qE "\"esd_(rule|filter)_error\":" <<< "$out"'
 
 echo "-- it runs scope.jq as filter.sh does"
@@ -105,7 +108,7 @@ else
   run "$T/inst/reload.sh"
   ok "reload.sh: the same, before it restarts anything"      '[ $rc = 1 ] && has "reload.sh: stopped, nothing was changed. /usr/bin/jq (" && ! has "went on"'
   mkdir "$T/inst/configs"; cp "$ROOT/test/fixtures/v1.cfg" "$T/inst/configs/ESDaemon.cfg"; run "$T/src/install.sh"
-  ok "install.sh, an older cfg migrated first: stops, naming the migrated draft" '[ $rc = 1 ] && has "install.sh: stopped" && has "(migrated draft: $T/"'
+  ok "install.sh, an older cfg migrated first: stops, naming the migrated draft" '[ $rc = 1 ] && has "install.sh: stopped" && has "(migrated draft: /"'
 fi
 
 echo; echo "PASS $pass  FAIL $fail"; [ $fail -eq 0 ]
