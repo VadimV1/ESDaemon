@@ -134,6 +134,40 @@ ok "MDM profile write (not the lock file): logged"                  '[ "$(D /usr
 ok "MDM .createStore.lock: dropped"                                 '[ "$(D /usr/libexec/mdmclient /private/var/db/ConfigurationProfiles/Settings/.createStore.lock 1 1 | n "$FD")" = 0 ]'
 ok "keybag .writing temp: dropped; other keybag write: logged"      '[ "$(D /usr/libexec/usermanagerd /private/var/db/keybags/persona.kb.writing 1 1 | n "$FD")" = 0 ] && [ "$(D /usr/libexec/usermanagerd /private/var/db/keybags/persona.kb 1 1 | n "$FD")" = 1 ]'
 
+echo "-- ParentImage /sbin/launchd for a rule means launchd started the process, not a cached parent image (#38)"
+# A process whose own exec image is /sbin/launchd is cached as a parent image like any other exec. A later child that
+# names it as parent must satisfy a `ParentImage is /sbin/launchd` rule only when launchd (pid 1) really is that parent.
+# FL <pid> <ppid>: that process exec'ing /sbin/launchd (original_ppid = ppid, a plain fork). KD <pid> <ppid> <orig>
+# <image> <args>: a later exec whose parent is <ppid>, so it reads the cached parent image.
+FL(){ jq -cn --argjson pid "$1" --argjson pp "$2" '{time:"t",process:{executable:{path:"/bin/zsh"},audit_token:{pid:$pp}},event:{exec:{target:{executable:{path:"/sbin/launchd"},is_platform_binary:true,audit_token:{pid:$pid,euid:0},ppid:$pp,original_ppid:$pp},args:["launchd"]}}}'; }
+KD(){ jq -cn --argjson pid "$1" --argjson pp "$2" --argjson op "$3" --arg i "$4" --argjson a "$5" '{time:"t",process:{executable:{path:"/sbin/launchd"},audit_token:{pid:$pp}},event:{exec:{target:{executable:{path:$i},signing_id:"com.apple.x",is_platform_binary:true,audit_token:{pid:$pid,euid:0},ppid:$pp,original_ppid:$op},args:$a}}}'; }
+# seen <image> <cfg>: from stdin, 1 if a ProcessStart record for <image> is logged, else 0
+seen(){ jq -n -cR --argjson cfg "$2" -f "$ROOT/src/scope.jq" | jq -r 'select(.EventType=="ProcessStart").Image' | grep -Fxc "$1"; }
+PL="$(echo "$DEF" | jq -c '.exclude=[[{field:"ParentImage",op:"is",value:"/sbin/launchd"}]]')"
+HD=/System/Library/PrivateFrameworks/HomeKitDaemon.framework/Support/homed
+ok "child of a non-pid-1 parent cached as /sbin/launchd: logged (not launchd-parented)" \
+   '[ "$( { FL 2000 4100; KD 2001 2000 2000 /usr/bin/evil "[\"evil\"]"; } | seen /usr/bin/evil "$PL")" = 1 ]'
+ok "genuine launchd child (ppid 1, original_ppid 1): still dropped" \
+   '[ "$(KD 3001 1 1 /usr/bin/evil "[\"evil\"]" | seen /usr/bin/evil "$PL")" = 0 ]'
+ok "reparented to pid 1 (ppid 1, original_ppid 4100) with pid 1 cached: logged, not launchd" \
+   '[ "$( { FL 1 0; KD 4001 1 4100 /usr/bin/evil "[\"evil\"]"; } | seen /usr/bin/evil "$PL")" = 1 ]'
+ok "default xpcproxy exclude: forged non-pid-1 launchd parent -> logged" \
+   '[ "$( { FL 2000 4100; KD 2001 2000 2000 /usr/libexec/xpcproxy "[\"xpcproxy\",\"com.apple.securityd\"]"; } | seen /usr/libexec/xpcproxy "$DEF")" = 1 ]'
+ok "default xpcproxy exclude: genuine launchd start -> dropped" \
+   '[ "$(KD 2001 1 1 /usr/libexec/xpcproxy "[\"xpcproxy\",\"com.apple.securityd\"]" | seen /usr/libexec/xpcproxy "$DEF")" = 0 ]'
+ok "default structural exclude: forged non-pid-1 launchd parent -> logged" \
+   '[ "$( { FL 2000 4100; KD 2002 2000 2000 "$HD" "[\"homed\"]"; } | seen "$HD" "$DEF")" = 1 ]'
+ok "default structural exclude: genuine launchd start -> dropped" \
+   '[ "$(KD 2002 1 1 "$HD" "[\"homed\"]" | seen "$HD" "$DEF")" = 0 ]'
+# file events carry the acting process's cached ParentImage, so the same determination must hold there. FLE <pid> <ppid>
+# <orig>: a file create by <pid>, after that pid's exec set its cached parent image. fseen <cfg>: 1 if it is logged.
+FLE(){ jq -cn --argjson pid "$1" --argjson pp "$2" --argjson op "$3" '{time:"t",process:{executable:{path:"/usr/bin/evil"},is_platform_binary:true,audit_token:{pid:$pid,euid:0},ppid:$pp,original_ppid:$op},event:{create:{destination_type:0,destination:{existing_file:{path:"/tmp/x"}}}}}'; }
+fseen(){ jq -n -cR --argjson cfg "$1" -f "$ROOT/src/scope.jq" | jq -r 'select(.EventType=="FileCreate").TargetFilename' | grep -Fxc /tmp/x; }
+ok "file event of a child whose forged parent image is /sbin/launchd: logged" \
+   '[ "$( { FL 2000 4100; KD 2001 2000 2000 /usr/bin/evil "[\"evil\"]"; FLE 2001 2000 2000; } | fseen "$PL")" = 1 ]'
+ok "file event of a genuine launchd child: still dropped by ParentImage rule" \
+   '[ "$( { KD 3001 1 1 /usr/bin/evil "[\"evil\"]"; FLE 3001 1 1; } | fseen "$PL")" = 0 ]'
+
 echo "-- [include]: empty = everything; with rules = only matches"
 INC="$(cfg '\n[include]\nImage image curl\nIsPlatformBinary is false\n')"
 ok "include: curl matches -> logged"     '[ "$(ev /bin/zsh /usr/bin/curl "[\"curl\",\"x\"]" | n "$INC")" = 1 ]'
