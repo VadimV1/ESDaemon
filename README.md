@@ -28,7 +28,7 @@ No kernel extension, no Apple entitlement, no third-party code, no agent to lice
 ESDaemon is bash, the command-line tools that ship with macOS, and one small Swift file. There is no package manager, no third-party library and no vendored code.
 
 - **Scripts** use bash and the tools macOS ships in `/bin` and `/usr/bin`, on its sealed system volume: `eslogger`, `jq` (part of macOS since 15), `launchctl`, `log`, `plutil`, `codesign`, `dscl`, `awk` and the standard POSIX utilities.
-- **The writer** (`src/ESDaemon.swift`) imports only Apple's `Foundation` and `os.log`. It is built with Apple's `swiftc` from the Xcode Command Line Tools, or comes prebuilt from this repository's releases.
+- **The writer** (`src/ESDaemon.swift`) imports only Apple's `Foundation` and `os.log`. It is built with Apple's `swiftc` from the Xcode Command Line Tools, or comes prebuilt from this repository's releases. Before it starts the daemons, the installer ad-hoc signs the writer, runs `codesign --verify --strict` on the result, and checks the binary can run on this Mac's architecture; if any of those fail it stops and changes nothing. The signature is **ad-hoc** (`codesign -s -`), **not** a Developer ID signature, and the binary is **not notarized** yet.
 - **Network:** none at run time. The only network access is to this repository on GitHub, when you run `quick-install.sh` or `esdaemon update`.
 
 What you trust is macOS and this repository; see [SECURITY.md](SECURITY.md).

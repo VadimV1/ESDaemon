@@ -59,6 +59,40 @@ install_files() {
   [ -f "$base/configs/ESDaemon.cfg" ] || install -o "$uid" -g "$gid" -m 644 "$src/configs/ESDaemon.cfg" "$base/configs/"   # never overwrite a tuned cfg
   [ ! -x "$src/build/ESDaemon" ] || install -o "$uid" -g "$gid" -m 755 "$src/build/ESDaemon" "$base/"   # else swiftc, below
 }
+
+# esd_verify_binary <path>: ad-hoc sign the writer, confirm codesign --verify accepts the result, and confirm it
+# can run on this Mac's architecture. Any failure prints why on stderr and returns 1, so the install stops before
+# it restarts the daemons. The signature is ad-hoc (codesign -s -, no Developer ID; the release is built the same
+# way) and is NOT notarized — see README / docs/GETTING-STARTED.md. Darwin-only tools; the installer runs on macOS.
+esd_verify_binary() {
+  local b="$1" host archs
+  codesign -s - -f "$b" || { echo "install.sh: could not ad-hoc sign $b (codesign failed above); nothing was restarted" >&2; return 1; }
+  codesign --verify --strict "$b" || { echo "install.sh: $b failed codesign --verify after signing; nothing was restarted" >&2; return 1; }
+  host="$(uname -m)"
+  archs="$(lipo -archs "$b" 2>/dev/null)" || archs=""   # lipo needs the Command Line Tools; file(1) is the fallback
+  [ -n "$archs" ] || archs="$(file -b "$b" 2>/dev/null)"
+  case " $archs " in
+    *" $host "*|*"[$host:"*|*"executable $host]"*) return 0 ;;   # the host arch, as lipo -archs or file(1) names it
+  esac
+  echo "install.sh: $b will not run on this Mac (need arch $host; it is: ${archs:-unknown}); nothing was restarted" >&2
+  return 1
+}
+
+# esd_restore_binary: leave $BASE/ESDaemon as the previously installed (verified) binary when a verify below
+# fails, so the daemons can never start a binary that did not pass. With no previous binary (a first install)
+# remove the unverified one install_files laid down, so nothing half-installed is left for a restart to run.
+esd_restore_binary() {
+  if [ -e "$PREVBIN" ]; then mv -f "$PREVBIN" "$BASE/ESDaemon"; echo "install.sh: kept the previously installed ESDaemon." >&2
+  else rm -f "$BASE/ESDaemon"; echo "install.sh: removed the unverified ESDaemon." >&2; fi
+}
+
+# Back up the installed (already verified) writer before install_files overwrites it, so a failed verify below can
+# put it back; both temporary copies are removed on exit. The daemons must never be left able to start a binary
+# that did not pass verification.
+STAGED="$BASE/.ESDaemon.staged.$$"; PREVBIN="$BASE/.ESDaemon.prev.$$"
+trap 'rm -f "$STAGED" "$PREVBIN"' EXIT
+[ ! -f "$BASE/ESDaemon" ] || [ -L "$BASE/ESDaemon" ] || cp -p "$BASE/ESDaemon" "$PREVBIN"
+
 install_files "$SRC" "$BASE" /usr/local/bin
 if [ -n "$MIG" ]; then
   OLD="$BASE/configs/ESDaemon.cfg.v1"; [ ! -e "$OLD" ] || OLD="$BASE/configs/ESDaemon.cfg.$(date +%Y%m%d-%H%M%S)"   # never overwrite an earlier backup
@@ -67,10 +101,17 @@ if [ -n "$MIG" ]; then
   echo "migrated $BASE/configs/ESDaemon.cfg to this version ([modules], [include]/[exclude]); old file: $OLD"
 fi
 
-if   [ -x "$SRC/build/ESDaemon" ]; then :   # installed by install_files
-elif command -v swiftc >/dev/null; then swiftc -O -o "$BASE/ESDaemon" "$SRC/src/ESDaemon.swift"
-else echo "need prebuilt build/ESDaemon (make build) or swiftc (xcode-select --install)"; exit 1; fi
-codesign -s - -f "$BASE/ESDaemon" 2>/dev/null || true
+# The writer binary: stage the new one, ad-hoc sign + verify + arch-check it, and only swap it in if it passes.
+# The daemons are never restarted onto a binary that could not be signed, failed codesign --verify, or cannot run
+# on this Mac. install_files copied a prebuilt one to $BASE/ESDaemon already (the install tree it lays is covered
+# by chain-tests); we re-stage from the same source, verify, then replace it in one atomic rename. A failed verify
+# restores the previous binary (or removes a first install's unverified one) and stops before the daemons restart.
+if   [ -x "$SRC/build/ESDaemon" ]; then cp "$SRC/build/ESDaemon" "$STAGED"
+elif command -v swiftc >/dev/null;  then swiftc -O -o "$STAGED" "$SRC/src/ESDaemon.swift"
+else echo "need prebuilt build/ESDaemon (make build) or swiftc (xcode-select --install)" >&2; exit 1; fi
+chmod 755 "$STAGED"
+if esd_verify_binary "$STAGED"; then mv -f "$STAGED" "$BASE/ESDaemon"; rm -f "$PREVBIN"   # swapped in; drop the backup
+else rm -f "$STAGED"; esd_restore_binary; exit 1; fi
 rm -f "$BASE/uls-writer" "$BASE/uls-writer.swift"   # pre-rename writer
 
 "$BASE/reload.sh"
