@@ -41,7 +41,7 @@ sudo /usr/local/ESDaemon/reload.sh                        # 4. apply (refuses an
 | `format` | `sysmon`, `sysmon+extras`, `slim`, `raw` | `sysmon+extras` in the shipped cfg. If the key is missing: `slim` (a legacy `slim = false` means `raw`) |
 | `parent_cmdline_max` | characters of `ParentCommandLine` written per event (`0` = no cap). The parent's command line is repeated in every child event, so one long parent inflates all its children; the cut value ends with `…[+N chars]`. `CommandLine` is only cut to fit `record_max`. Rules match the full parent command line. | `256` |
 | `args_max` | most `argv` elements rendered into `CommandLine` (`0` = no software cap, but still clamped by the ceiling below). `argv` is attacker-controlled and can hold hundreds of thousands of entries; rendering them all stalls the single-threaded filter for seconds and makes macOS drop events, so beyond this count the line is cut with a `…[+N args]` marker. Normal commands have far fewer. | `4096` |
-| `record_max` | largest record (bytes) written to the unified log. The unified log keeps at most 32759 bytes of a message and cuts the rest, which leaves invalid JSON the SIEM drops whole, so this is **clamped to 32759 even when set to `0`** ("no software limit") or higher — the backend limit is real regardless of config, and a record is always kept parseable. A bigger record has its largest value (usually `CommandLine`) cut in the middle, marked `…[+N chars]…`, keeping the start and the end. Rules still see the full values. | `32000` |
+| `record_max` | largest record (bytes) written to the unified log. The unified log keeps at most 32759 bytes of a message and cuts the rest, which leaves invalid JSON the SIEM drops whole, so this is **clamped to 32759 even when set to `0`** ("no software limit") or higher — the backend limit is real regardless of config, and a record is always kept parseable. A bigger record has its largest value (usually `CommandLine`) cut in the middle, marked `…[+N chars]…`, keeping the start and the end; one still too big after that is replaced by an `esd_record_too_large` marker that keeps the record's time, `EventID`, [event number](#event-numbers) and `Image`, where the format has them. Rules still see the full values. | `32000` |
 | `heartbeat` | seconds between two heartbeat records, which tell a stopped pipeline from a quiet Mac (see [Heartbeat](#heartbeat)). `0` = off; at most `86400` (a day). | `300` |
 
 ## What to log: `[modules]`
@@ -74,7 +74,7 @@ file = read
 | | `kernel` | kernel extension loaded or unloaded | `SystemKernel` (123) |
 | | `mount` | disk or share mounted, unmounted or remounted | `SystemMount` (124) |
 
-EventIDs follow Sysmon where Sysmon has the same event (1, 5, 8, 10, 11, 23); the 100+ numbers are ESDaemon's own. Every record carries the process that caused it (`Image`, `User`, `ProcessId`, `ProcessGuid`, code signing); file records add `TargetFilename`; records without a Sysmon shape carry the event's details in `Detail`.
+EventIDs follow Sysmon where Sysmon has the same event (1, 5, 8, 10, 11, 23); the 100+ numbers are ESDaemon's own. Every record carries the process that caused it (`Image`, `User`, `ProcessId`, `ProcessGuid`, code signing); file records add `TargetFilename`; records without a Sysmon shape carry the event's details in `Detail`. In `sysmon+extras` every record also carries the event's number, `GlobalSeqNum` (see [Event numbers](#event-numbers)).
 
 **File reads and writes are very frequent** (an idle Mac opens dozens of files a second, almost all system daemons). Pair `file = read` / `write` with rules, for example:
 ```
@@ -94,7 +94,7 @@ Some operations need events an older macOS's eslogger does not have; those event
 
 ESDaemon's own records, the drop markers (`eslogger_scoped_gap`, `eslogger_scoped_restart`) and the heartbeat (`eslogger_scoped_heartbeat`), are always written; rules do not apply to them.
 
-A rule that cannot be evaluated on an event never hides it: the event is logged, and `esd_rule_error` in its record says why (see [Writing safe rules](#writing-safe-rules)). If the record itself cannot be built (a malformed event, or a bug), an `esd_filter_error` marker takes its place, with the error and what identifies the event: `EventKind` (the eslogger event, e.g. `exec`), `User`, `Image` and `ProcessId`. In the `sysmon` formats it starts with the Sysmon envelope, as the gap marker's does: `{"EventID":255,"EventType":"esd_filter_error",…}`. The filter goes on with the next event.
+A rule that cannot be evaluated on an event never hides it: the event is logged, and `esd_rule_error` in its record says why (see [Writing safe rules](#writing-safe-rules)). If the record itself cannot be built (a malformed event, or a bug), an `esd_filter_error` marker takes its place, with the error and what identifies the event: `EventKind` (the eslogger event, e.g. `exec`), its `GlobalSeqNum` (in every format), `User`, `Image` and `ProcessId`. In the `sysmon` formats it starts with the Sysmon envelope, as the gap marker's does: `{"EventID":255,"EventType":"esd_filter_error",…}`. The filter goes on with the next event.
 
 **ESDaemon never logs itself.** Otherwise every record it writes would create more records. Not logged: binaries under `/usr/local/ESDaemon/`, and the launchd job that runs `filter.sh` together with every process it is *responsible* for (its `cfg.sh`, `jq`, `awk` … helpers). Joining that set takes root: a launchd job, or files under `/usr/local/ESDaemon/`. That holds only while nobody else can write there, so `install.sh` and `reload.sh` refuse to run, and `esdaemon status` says `UNSAFE`, when anything in `/usr/local/ESDaemon` or a directory above it is not root's alone. The check runs only when they do: a directory that becomes writable for others in between shows up at the next install, reload or status. ESDaemon does not also match its own code signature: it is signed ad hoc, so its signing identifier is one anyone can give their own binary, and its cdhash changes with every build. An administrator running `sudo /usr/local/ESDaemon/reload.sh` by hand is logged like any other admin action.
 
@@ -118,6 +118,26 @@ Set up two alerts per Mac:
 |---|---|
 | **No heartbeat for more than two intervals.** With the default 300, alert at 11 minutes: a restart can stretch one gap to two intervals plus the restart's few seconds, and the collector adds its delay. | **The pipeline is down:** the filter is stopped or keeps restarting, or the writer, the unified log or the collector is stuck. `eslogger_scoped_restart` records about every 10 seconds mean eslogger keeps exiting and the filter restarts with it, most often because eslogger has no Full Disk Access (`/var/log/ESDaemon/eslogger.stderr` says why). |
 | **Heartbeats, but no `ProcessStart` for two intervals** (or `records` 0 in two heartbeats in a row). | **eslogger is down or lost Full Disk Access:** the filter and the writer run, but no events reach them. Check `sudo launchctl print system/com.esdaemon.eslogger` and `eslogger.stderr`. `[include]` / `[exclude]` rules that drop every launch look the same. |
+
+## Event numbers
+
+EndpointSecurity numbers the events it sends eslogger, one after another (`global_seq_num`). In `sysmon+extras`, the default, the record of every event carries that number as `GlobalSeqNum`, right after `UtcTime`; `slim` and `raw` keep it as `global_seq_num`, and plain `sysmon` has Sysmon's fields only. The `esd_filter_error` marker carries `GlobalSeqNum` in every format.
+
+What it is good for:
+
+- **Order.** Sorted by `GlobalSeqNum`, a Mac's records are in the order eslogger received the events, also where many share a millisecond of `UtcTime` or reached the SIEM out of order.
+- **Repeats.** A collector that reads part of the log again sends those records again ([GETTING-STARTED.md](GETTING-STARTED.md#5-ship-the-events-to-your-siem)). Two records from one Mac with the same `GlobalSeqNum` and `UtcTime` are the same event.
+- **Drops.** An `eslogger_scoped_gap` record says how many events EndpointSecurity dropped (its value) right after the event numbered `after_global_seq_num`. The records before the drop have a `GlobalSeqNum` of at most `after_global_seq_num`, the records after it at least `after_global_seq_num` + `eslogger_scoped_gap` + 1.
+
+The numbers start over when eslogger restarts: after a reload that changes `[modules]`, a crash or a reboot. The filter restarts with eslogger and logs an `eslogger_scoped_restart` record before anything else, so compare numbers only between two of those.
+
+**A gap in the numbers is no sign of loss.** EndpointSecurity numbers every event eslogger receives, and the filter leaves events out on purpose: `[exclude]` and `[include]` rules, opens and closes that are not a file read or write, ESDaemon's own processes. Each of those uses up a number, so records skip numbers all the time with nothing lost; with the default config, most of an idle Mac's events are left out ([DEFAULT-CONFIG.md](DEFAULT-CONFIG.md#measured-impact)). Do not alert on gaps in `GlobalSeqNum`. Lost events and records show up here:
+
+| Lost | Shows up as |
+|---|---|
+| events EndpointSecurity dropped before eslogger read them | an `eslogger_scoped_gap` record, with how many |
+| events while eslogger restarted | an `eslogger_scoped_restart` record; how many is not known |
+| records lost after ESDaemon wrote them, in the unified log or the collector | fewer records arriving between two [heartbeats](#heartbeat) than the second one's `records` |
 
 ## Rules
 

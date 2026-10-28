@@ -105,6 +105,13 @@ done
 B=$(run "$BIG")
 ok "cut keeps head and tail of CommandLine, marks the cut" 'echo "$B" | jq -e ".CommandLine | startswith(\"curl -V AAA\") and endswith(\"http://evil.example/x\") and test(\"…\\\\[\\\\+[0-9]+ chars\\\\]…\")" >/dev/null'
 ok "cut record keeps Image and EventID"    '[ "$(echo "$B" | jq -r "[.Image,.EventID]|map(tostring)|join(\",\")")" = "/usr/bin/curl,1" ]'
+# the event's number survives the cut, also at the 32759-byte ceiling (record_max 0), and in the marker that takes the
+# place of a record still too big after cutting (record_max 150), under the record's own name for it
+BIGN=$(echo "$BIG" | jq -c '.global_seq_num = 7340035')
+fitted(){ run "$BIGN" "$(fmt "$1" | jq -c --argjson m "$2" '.record_max = $m')"; }   # fitted <format> <record_max>
+ok "cut record keeps GlobalSeqNum: <= 32000 bytes, valid JSON" 'B=$(fitted sysmon+extras 32000); [ "$(printf %s "$B" | wc -c | tr -d " ")" -le 32000 ] && [ "$(echo "$B" | jq -c "[.GlobalSeqNum, (.CommandLine | test(\"…\\\\[\\\\+[0-9]+ chars\\\\]…\"))]")" = "[7340035,true]" ]'
+ok "record_max 0: cut to <= 32759 bytes, GlobalSeqNum kept" 'B=$(fitted sysmon+extras 0); [ "$(printf %s "$B" | wc -c | tr -d " ")" -le 32759 ] && [ "$(echo "$B" | jq .GlobalSeqNum)" = 7340035 ]'
+ok "too big to cut: the marker in its place keeps the number, <= 150 bytes" '[ "$(for f in sysmon+extras slim raw; do B=$(fitted $f 150); [ "$(printf %s "$B" | wc -c | tr -d " ")" -le 150 ] && echo "$B" | jq -c "[.esd_record_too_large > 0, .GlobalSeqNum, .global_seq_num]"; done | tr -d "\n")" = "[true,7340035,null][true,null,7340035][true,null,7340035]" ]'
 MANY=$(echo "$BIG" | jq -c '.event.exec.args = ["curl"] + [range(0; 20000) | "ab\u0001"]')
 ok "20000 small args (control chars): fits, valid JSON" 'M=$(run "$MANY" "$(fmt slim)"); [ "$(printf %s "$M" | wc -c | tr -d " ")" -le 32000 ] && echo "$M" | jq -e .exec.args >/dev/null'
 SMALL=$(echo "$BIG" | jq -c '.event.exec.args = ["curl","-V"]')
@@ -151,7 +158,19 @@ NOREC=$(jq -cn '{time:"2026-09-28T10:00:01Z",process:{executable:{path:"/bin/zsh
 ok "record that cannot be built: marker names the event, with the Sysmon envelope" '[ "$(run "$NOREC" | jq -c "[.EventID,.EventType,.UtcTime,.EventKind,.User,.Image,.ProcessId,(.esd_filter_error | length > 0)]")" = "[255,\"esd_filter_error\",\"2026-09-28 10:00:01.000\",\"exec\",\"alice\",\"/usr/bin/curl\",51,true]" ]'
 ok "same in slim: the marker without an envelope"  '[ "$(run "$NOREC" "$(fmt slim)" | jq -c "[has(\"EventID\"),.EventKind,.User,.Image,.ProcessId]")" = "[false,\"exec\",\"alice\",\"/usr/bin/curl\",51]" ]'
 ok "same in raw: the event itself, with the error" '[ "$(run "$NOREC" "$(fmt raw)" | jq -c "[.event.exec.target.executable.path, (.esd_rule_error | length > 0)]")" = "[\"/usr/bin/curl\",true]" ]'
+NORECN=$(echo "$NOREC" | jq -c '.global_seq_num = 7340036')
+ok "the marker carries the event's GlobalSeqNum, in every format" '[ "$(for f in sysmon+extras sysmon slim; do run "$NORECN" "$(fmt $f)" | jq -c "[has(\"esd_filter_error\"), .GlobalSeqNum]"; done | tr -d "\n")" = "[true,7340036][true,7340036][true,7340036]" ]'
 AROUND=$(printf '%s\n%s\n%s\n' "$BASH" "$NOREC" "$CURL" | jq -n -cR --argjson cfg "$CFG" -f "$ROOT/src/scope.jq" | jq -r '[.EventType, .Image, .ParentCommandLine] | join(",")' | tr "\n" ";")
 ok "events around it unaffected, the parent cache too" '[ "$AROUND" = "ProcessStart,/bin/bash,;esd_filter_error,/usr/bin/curl,;ProcessStart,/usr/bin/curl,bash ./run.sh;" ]'
+
+echo "-- GlobalSeqNum: records skip the numbers of events the filter leaves out; only ES drops get a gap marker"
+# apple_job <n> <image> <signing id> <args json>: an Apple job's launch by launchd, which the default config leaves out
+apple_job(){ jq -cn --argjson s "$1" --arg i "$2" --arg sid "$3" --argjson a "$4" '{time:"2026-09-28T10:00:0\($s)Z",global_seq_num:$s,
+  process:{executable:{path:"/sbin/launchd"},is_platform_binary:true,audit_token:{pid:1}},
+  event:{exec:{target:{executable:{path:$i},signing_id:$sid,is_platform_binary:true,audit_token:{pid:(70+$s),euid:0},ppid:1,original_ppid:1},args:$a}}}'; }
+seqs(){ jq -n -cR --argjson cfg "$CFG" -f "$ROOT/src/scope.jq" \
+  | jq -r 'if has("eslogger_scoped_gap") then "gap after \(.after_global_seq_num) +\(.eslogger_scoped_gap)" else "record \(.GlobalSeqNum)" end' | tr "\n" ";"; }
+ok "events left out use up numbers: records 1 and 4, no gap marker" '[ "$( (g 1; apple_job 2 /usr/libexec/xpcproxy com.apple.xpc.proxy "[\"xpcproxy\",\"com.apple.contactsd\"]"; apple_job 3 /usr/libexec/trustd com.apple.trustd "[\"trustd\"]"; g 4) | seqs)" = "record 1;record 4;" ]'
+ok "around an ES drop: the record before is after_global_seq_num, the one after is that + gap + 1" '[ "$( (g 1; g 5) | seqs)" = "record 1;gap after 1 +3;record 5;" ]'
 
 echo; echo "PASS $pass  FAIL $fail"; [ $fail -eq 0 ]

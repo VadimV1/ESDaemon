@@ -16,7 +16,7 @@ ok "User (uid map), pids, cwd"       '[ "$(echo "$S" | jq -r "[.User,.ProcessId,
 ok "CDHash plain hex, signing extras" '[ "$(echo "$S" | jq -r "[.CDHash,.SigningId,(.IsPlatformBinary|tostring)]|join(\",\")")" = "abcd,com.apple.curl,true" ]'
 ok "ProcessGuid is GUID-shaped (start time + pid)" '[ "$(echo "$S" | jq -r .ProcessGuid)" = "{6ABA3A9F-0000-0000-0000-000000001092}" ]'
 ok "field order: EventID, EventType, UtcTime first; CDHash last; no RuleName" '[ "$(echo "$S" | jq -r "keys_unsorted | (.[0:3] + [last]) | join(\",\")")" = "EventID,EventType,UtcTime,CDHash" ] && [ "$(echo "$S" | jq "has(\"RuleName\")")" = false ]'
-ok "field order: User, Image, CommandLine follow the header" '[ "$(echo "$S" | jq -r "keys_unsorted[3:6] | join(\",\")")" = "User,Image,CommandLine" ]'
+ok "field order: GlobalSeqNum ends the header, User, Image, CommandLine follow" '[ "$(echo "$S" | jq -r "keys_unsorted[3:7] | join(\",\")")" = "GlobalSeqNum,User,Image,CommandLine" ]'
 ok "no null fields emitted"           '[ "$(echo "$S" | jq "[.[]|select(.==null)]|length")" = 0 ]'
 F='{"time":"2026-09-28T10:00:01Z","process":{"executable":{"path":"/usr/bin/curl"},"audit_token":{"pid":7,"euid":0},"is_platform_binary":true},"event":{"create":{"destination_type":1,"destination":{"new_path":{"dir":{"path":"/Users/a/Library/LaunchAgents"},"filename":"x.plist"}}}}}'
 S2=$(echo "$F" | jq -n -cR --argjson cfg "$CFG" -f "$ROOT/src/scope.jq")
@@ -33,6 +33,12 @@ PURE=$(echo "$CFG" | jq -c '.format="sysmon"')
 P=$(echo "$EXEC" | jq -n -cR --argjson cfg "$PURE" -f "$ROOT/src/scope.jq")
 ok "format=sysmon has no macOS extras" '[ "$(echo "$P" | jq "has(\"SigningId\") or has(\"Uid\")")" = false ]'
 ok "format=sysmon+extras has extras"   '[ "$(echo "$S" | jq "has(\"SigningId\") and (has(\"Uid\") or has(\"Hashes\") or has(\"OriginalParentProcessId\") | not)")" = true ]'
+# GlobalSeqNum: EndpointSecurity's number for the event (global_seq_num), on every sysmon+extras record; plain sysmon
+# keeps Sysmon's names only
+NUM=$(printf '%s\n%s\n' "$(echo "$EXEC" | jq -c '.global_seq_num = 7340033')" "$(echo "$F" | jq -c '.global_seq_num = 7340034')")
+ok "sysmon+extras: GlobalSeqNum = the event's global_seq_num (exec, file event)" '[ "$(echo "$NUM" | jq -n -cR --argjson cfg "$CFG" -f "$ROOT/src/scope.jq" | jq -c "[.EventType, .GlobalSeqNum]" | tr -d "\n")" = "[\"ProcessStart\",7340033][\"FileCreate\",7340034]" ]'
+ok "format=sysmon: no GlobalSeqNum, User follows the header" '[ "$(echo "$NUM" | jq -n -cR --argjson cfg "$PURE" -f "$ROOT/src/scope.jq" | jq -c "[.EventType, has(\"GlobalSeqNum\"), keys_unsorted[3]]" | tr -d "\n")" = "[\"ProcessStart\",false,\"User\"][\"FileCreate\",false,\"User\"]" ]'
+ok "event without global_seq_num: no GlobalSeqNum (never invented)" '[ "$(echo "$S2" | jq "has(\"GlobalSeqNum\")")" = false ]'
 RAWCFG=$(echo "$CFG" | jq -c '.format="raw"')
 R=$(echo "$EXEC" | jq -n -cR --argjson cfg "$RAWCFG" -f "$ROOT/src/scope.jq")
 ok "format=raw passes eslogger JSON untouched" '[ "$(echo "$R" | jq -S -c .)" = "$(echo "$EXEC" | jq -S -c .)" ]'

@@ -72,8 +72,8 @@ On an Intel Mac with Homebrew, `/usr/local/bin` belongs to the Homebrew user, so
 ## What a record looks like
 
 ```json
-{"EventID":1,"EventType":"ProcessStart","UtcTime":"2026-10-25 11:42:06.838","User":"alice",
- "Image":"/usr/bin/curl","CommandLine":"curl -s -o /tmp/x https://example.com/a.sh",
+{"EventID":1,"EventType":"ProcessStart","UtcTime":"2026-10-25 11:42:06.838","GlobalSeqNum":52807,
+ "User":"alice","Image":"/usr/bin/curl","CommandLine":"curl -s -o /tmp/x https://example.com/a.sh",
  "CurrentDirectory":"/Users/alice","ProcessId":37700,"ProcessGuid":"{6ADDEB0E-000C-C7E9-0000-000000009344}",
  "ParentImage":"/bin/zsh","ParentCommandLine":"-zsh","ParentProcessId":37389,
  "ResponsibleProcessId":37385,"TerminalSessionId":37389,

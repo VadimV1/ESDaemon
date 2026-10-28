@@ -60,8 +60,8 @@ log stream --info --predicate 'subsystem == "com.apple.eslogger" AND process == 
 In another terminal run `curl -s https://example.com -o /dev/null`. A record like this should appear:
 
 ```json
-{"EventID":1,"EventType":"ProcessStart","UtcTime":"…","User":"alice","Image":"/usr/bin/curl",
- "CommandLine":"curl -s https://example.com -o /dev/null","ParentImage":"/bin/zsh", …}
+{"EventID":1,"EventType":"ProcessStart","UtcTime":"…","GlobalSeqNum":52807,"User":"alice",
+ "Image":"/usr/bin/curl","CommandLine":"curl -s https://example.com -o /dev/null","ParentImage":"/bin/zsh", …}
 ```
 
 Nothing shows up? See [Troubleshooting](#troubleshooting).
@@ -140,8 +140,9 @@ The `esdaemon` command removes everything it installed, itself included — noth
 | `esdaemon status` says `UNSAFE` (exit 1) | the same, found after the install: fix each path it lists. For `command … UNSAFE`, delete `/usr/local/bin/esdaemon` and use `sudo /usr/local/ESDaemon/bin/esdaemon` |
 | `esdaemon: command not found` | an Intel Mac with Homebrew: use `sudo /usr/local/ESDaemon/bin/esdaemon` (step 1) |
 | Records cut off or not valid JSON | a custom `subsystem` / `category`: `reload.sh` turns on large messages for it; keep `record_max` at or below 32000 |
-| Same record many times in the SIEM | the collector, not ESDaemon: use `ndjson` and a receiver version from step 5 |
+| Same record many times in the SIEM | the collector, not ESDaemon: use `ndjson` and a receiver version from step 5. The copies have the same `GlobalSeqNum` and `UtcTime` |
 | A burst of old records after a reboot | the collector replaying `max_log_age` of history on startup: set it to 1 hour (step 5) |
-| `eslogger_scoped_gap` records | Endpoint Security dropped events because the reader fell behind (very high load); the record says how many |
-| `eslogger_scoped_restart` records | eslogger restarted (reload, crash, boot); events during the restart are not seen |
+| `eslogger_scoped_gap` records | Endpoint Security dropped events because the reader fell behind (very high load); the record says how many, and `after_global_seq_num` is the `GlobalSeqNum` of the last event before them |
+| `eslogger_scoped_restart` records | eslogger restarted (reload, crash, boot); events during the restart are not seen, and `GlobalSeqNum` starts over |
+| `GlobalSeqNum` skips numbers from one record to the next | normal: events the filter leaves out (`[exclude]` rules, ESDaemon's own processes) use up numbers too. Loss shows elsewhere: as `eslogger_scoped_gap` records, or as fewer records arriving between two heartbeats than the second one's `records` ([CONFIG.md](CONFIG.md#event-numbers)) |
 | No `eslogger_scoped_heartbeat` records | the filter or the collector is down, or `heartbeat = 0`: check that both daemons run (above), then the collector; see [CONFIG.md](CONFIG.md#heartbeat) |
