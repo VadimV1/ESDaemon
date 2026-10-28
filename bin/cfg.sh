@@ -6,6 +6,8 @@
 # Anything cfg.sh does not understand is an error, never silently ignored: an unknown [section] or key, a
 # typo'd value, a line outside a section. A typo must fail reload.sh, not quietly switch detection off.
 set -euo pipefail
+# fixed PATH: this can run as root, and macOS sudo keeps the caller's PATH — so bare tool names resolve to system binaries
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 F="${1:?cfg file}"; MODE="${2:-json}"
 # [modules]: what to log, as <object> = <operation> ...  ->  the eslogger events behind each operation.
 # The one place modules are defined (scope.jq names each event: ProcessStart, FileRead ...; docs/CONFIG.md lists them).

@@ -9,6 +9,8 @@
 # another user may have changed (esdaemon status: UNSAFE) without running anything from the install tree.
 # Records ESDaemon already wrote stay in the unified log until macOS rotates them out.
 set -uo pipefail
+# fixed PATH: this can run as root, and macOS sudo keeps the caller's PATH — so bare tool names resolve to system binaries
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 BASE=/usr/local/ESDaemon; LD=/Library/LaunchDaemons; LOGS=/var/log/ESDaemon
 [ "$(id -u)" = 0 ] || { echo "run as root: sudo $0" >&2; exit 1; }
 

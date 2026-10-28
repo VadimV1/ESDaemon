@@ -8,6 +8,8 @@
 #   [always] [download] [conditional]  dropped: they chose what to KEEP; every event is kept now
 # Usage: migrate-cfg.sh <old.cfg>   (new cfg on stdout; validate it with cfg.sh before use)
 set -euo pipefail
+# fixed PATH: this can run as root, and macOS sudo keeps the caller's PATH — so bare tool names resolve to system binaries
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 F="${1:?old cfg}"; HERE="$(cd "$(dirname "$0")" && pwd)"
 # the module table lives in cfg.sh (installed copy or the repo's bin/)
 MODTAB="$(sed -n "/^export MODTAB='/,/^'/p" "$HERE/cfg.sh" | sed '1d;$d')"; export MODTAB

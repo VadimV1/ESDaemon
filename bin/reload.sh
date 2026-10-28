@@ -2,6 +2,8 @@
 # reload.sh — (re)generate both LaunchDaemons from ESDaemon.cfg and restart them. Run after editing the cfg.
 #   reload.sh --render <dir> [cfg]   only validate the cfg and write the two plists into <dir> (no root, no launchctl)
 set -euo pipefail
+# fixed PATH: this can run as root, and macOS sudo keeps the caller's PATH — so bare tool names resolve to system binaries
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 HERE="$(cd "$(dirname "$0")" && pwd)"; BASE=/usr/local/ESDaemon; RUN="$BASE/run"; FIFO="$RUN/raw.fifo"; LD=/Library/LaunchDaemons
 CFGF="$BASE/configs/ESDaemon.cfg"; RENDER=""
 if [ "${1:-}" = --render ]; then RENDER="${2:?output dir}"; CFGF="${3:-$CFGF}"; fi

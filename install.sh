@@ -3,6 +3,8 @@
 #   com.esdaemon.eslogger : /usr/bin/eslogger <events> -> FIFO   (FDA on /usr/bin/eslogger only)
 #   com.esdaemon.filter   : FIFO -> filter -> unified log         (no FDA)
 set -euo pipefail
+# fixed PATH: this can run as root, and macOS sudo keeps the caller's PATH — so bare tool names resolve to system binaries
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 SRC="$(cd "$(dirname "$0")" && pwd)"; BASE=/usr/local/ESDaemon; LD=/Library/LaunchDaemons
 # The daemons run as root from $BASE: before anything in it is used or changed, stop unless only root can change it,
 # what is in it, and every directory above it (bin/chain.sh).

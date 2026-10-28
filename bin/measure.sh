@@ -5,6 +5,8 @@
 # Use the Mac normally from OTHER windows while it runs: eslogger suppresses every process in its own process group,
 # so commands typed in the terminal running measure.sh are not captured (and would show up as false ES gaps).
 set -uo pipefail
+# fixed PATH: this can run as root, and macOS sudo keeps the caller's PATH — so bare tool names resolve to system binaries
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 SECS="${1:-300}"; HERE="$(cd "$(dirname "$0")" && pwd)"; TMP="$(mktemp -d)"
 if [ -f "$HERE/scope.jq" ]; then JQF="$HERE/scope.jq"; CFGF="$HERE/configs/ESDaemon.cfg"      # installed layout
 else JQF="$HERE/../src/scope.jq"; CFGF="$HERE/../configs/ESDaemon.cfg"; fi                 # repo layout
