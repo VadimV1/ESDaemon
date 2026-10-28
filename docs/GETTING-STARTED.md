@@ -58,7 +58,7 @@ No restart is needed: the eslogger daemon retries every 10 seconds and starts pr
 ## 4. Check that events arrive
 
 ```bash
-log stream --info --predicate 'subsystem == "com.apple.eslogger" AND process == "ESDaemon"'
+log stream --info --predicate 'subsystem == "com.apple.eslogger" AND process == "ESDaemon" AND userIdentifier == 0'
 ```
 
 In another terminal run `curl -s https://example.com -o /dev/null`. A record like this should appear:
@@ -77,14 +77,14 @@ ESDaemon writes one record per event to the unified log under subsystem `com.app
 | Setting | Value |
 |---|---|
 | Source | macOS Unified Logging |
-| Predicate | `subsystem == "com.apple.eslogger" AND process == "ESDaemon"` |
+| Predicate | `subsystem == "com.apple.eslogger" AND process == "ESDaemon" AND userIdentifier == 0` |
 | Log format | `ndjson` |
 | Version | Bindplane agent v1.110.2 or later (OpenTelemetry Collector contrib v0.162.0 or later) |
 | Max log age | 5 minutes (`max_log_age: 5m`) where your tool allows it; Bindplane's form takes whole hours, so 1 hour there. **Never 0** |
 
 Why these values:
 
-- The **predicate** collects only ESDaemon's records, not the whole unified log.
+- The **predicate** collects only ESDaemon's records, not the whole unified log. `userIdentifier == 0` restricts it to the root writer, so a record a non-root process logged under the same subsystem and name is not picked up.
 - **`ndjson`** gives one line per record. The receiver's `json` format prints a record over several lines and re-sends records on every poll.
 - **Max log age 0 does not mean "from now":** the receiver then starts with no time limit and re-sends everything macOS still keeps (87,437 records, 176 MB on a test Mac). A Mac takes ~3 minutes from boot to the agent's first poll, so 5 minutes covers boot and login.
 - **Max log age** is how far back the receiver reads when it starts: after every reboot or agent restart it re-sends that much history. At the default 24 hours one restart on a test Mac re-sent 76,302 records (158 MB) in two minutes. Keep it short.

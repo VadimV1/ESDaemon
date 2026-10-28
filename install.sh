@@ -121,5 +121,5 @@ if [ "$CMD" != esdaemon ]; then
   echo "          (not in /usr/local/bin: other users can replace files there, and this command runs as root)"
   printf '%s\n' "$BINWHY" | sed 's/; fix: .*//; s/^ */          /'
 fi
-echo "Check:    log stream --info --predicate 'subsystem == \"com.apple.eslogger\" AND process == \"ESDaemon\"'"
+echo "Check:    log stream --info --predicate 'subsystem == \"com.apple.eslogger\" AND process == \"ESDaemon\" AND userIdentifier == 0'"
 echo "Remove:   sudo $CMD uninstall"
