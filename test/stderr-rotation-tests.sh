@@ -38,16 +38,19 @@ EOF
   ok "size is the rotation trigger (when = '*')"   '[ "$when" = "*" ]'
   ok "marks no process needs signalling (flag N)"  'case "$flags" in *N*) true;; *) false;; esac'
 
-  echo "-- this Mac's newsyslog accepts the generated config's field layout (macOS only)"
-  if command -v newsyslog >/dev/null 2>&1; then
+  echo "-- this Mac's newsyslog accepts the generated config's field layout (macOS only, needs root)"
+  # newsyslog needs root even for -n (a dry run): a non-root run exits "must have root privs" regardless of the
+  # config. So validate only where passwordless sudo is available (the CI macOS runners and the Mac lab); elsewhere
+  # skip — the static field assertions above already encode the bound properties without newsyslog.
+  if command -v newsyslog >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
     # Validate the exact owner/mode/count/size/when/flags tuple over a log file that exists, so the check turns
     # on field validity rather than on the real /var/log path being present or on newsyslog's exact wording.
     probe="$TD/probe.conf"; plog="$TD/probe.stderr"; : > "$plog"
     printf '%s %s %s %s %s %s %s\n' "$plog" "$og" "$mode" "$count" "$size" "$when" "$flags" > "$probe"
-    newsyslog -n -f "$probe" >/dev/null 2>&1; rc=$?
+    sudo -n newsyslog -n -f "$probe" >/dev/null 2>&1; rc=$?
     ok "newsyslog -n accepts the field layout (exit 0)" '[ "$rc" -eq 0 ]'
   else
-    echo "  skipped: newsyslog not present (CI on Linux and the Mac lab cover it)"
+    echo "  skipped: newsyslog absent or no passwordless sudo (the Mac lab validates it as root)"
   fi
 else
   echo "  skipped: reload.sh --render produced no plists here (cfg.sh needs /usr/bin/jq; CI/macOS cover it)"
