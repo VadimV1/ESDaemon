@@ -19,6 +19,7 @@ for j in filter eslogger; do
   launchctl bootout "system/com.esdaemon.$j" 2>/dev/null && echo "stopped com.esdaemon.$j"
   rm -f "$LD/com.esdaemon.$j.plist"
 done
+rm -f /etc/newsyslog.d/com.esdaemon.conf   # the stderr-rotation config reload.sh installed (issue #9)
 if [ $PURGE = 0 ] && [ -f "$BASE/configs/ESDaemon.cfg" ]; then
   [ -d "$LOGS" ] || install -d -m 700 "$LOGS" 2>/dev/null || mkdir -p "$LOGS"
   cp "$BASE/configs/ESDaemon.cfg" "$LOGS/ESDaemon.cfg.uninstalled" \
