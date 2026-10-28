@@ -9,6 +9,8 @@ SECS="${1:-300}"; HERE="$(cd "$(dirname "$0")" && pwd)"; TMP="$(mktemp -d)"
 if [ -f "$HERE/scope.jq" ]; then JQF="$HERE/scope.jq"; CFGF="$HERE/configs/ESDaemon.cfg"      # installed layout
 else JQF="$HERE/../src/scope.jq"; CFGF="$HERE/../configs/ESDaemon.cfg"; fi                 # repo layout
 echo "capturing exec for ${SECS}s ..."
+# raw.ndjson is eslogger's output untouched: each exec event carries the process's full environment (tokens,
+# secrets). Kept so try.sh can dry-run a config on it; the closing note says so and how to delete the capture.
 /usr/bin/eslogger exec > "$TMP/raw.ndjson" 2>/dev/null & P=$!
 # a background job ignores Ctrl-C: without this, an interrupted run leaves eslogger filling $TMP forever
 trap 'kill "$P" 2>/dev/null' EXIT; trap 'exit 130' INT TERM HUP
@@ -33,4 +35,9 @@ awk -v rb="$RAW_B" -v rn="$RAW_N" -v kb="$K_B" -v kn="$K_N" -v s="$SECS" 'BEGIN{
  printf "raw:  %d events  %.1f MB  -> %.2f GB/hour\n", rn, rb/1e6, rb/s*3600/1e9;
  printf "kept: %d events  %.1f MB  -> %.3f GB/hour  (%.2f%% of raw bytes)\n", kn, kb/1e6, kb/s*3600/1e9, (rb?kb*100/rb:0) }'
 [ "$GAPS" = 0 ] || echo "WARNING: EndpointSecurity dropped $GAPS events during the capture (eslogger_scoped_gap); raw numbers are a lower bound"
-echo "samples kept in $TMP"
+echo
+echo "samples kept in $TMP (readable only by you):"
+echo "  raw.ndjson       eslogger's output untouched — each exec carries the process's FULL environment,"
+echo "                   which can hold tokens and other secrets; try.sh can dry-run a config against it"
+echo "  out.ndjson / kept.ndjson   the scoped records to tune from"
+echo "delete the capture when done:  rm -rf \"$TMP\""
