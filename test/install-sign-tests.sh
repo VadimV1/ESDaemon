@@ -4,8 +4,9 @@
 #   1. static (every platform): install.sh no longer hides a codesign failure (no `codesign ... || true`), it runs
 #      `codesign --verify --strict`, it checks the architecture, and the verify gate comes before reload.sh. These
 #      fail on a tree without the fix, so they also prove the behaviour change is wired in.
-#   2. esd_verify_binary (macOS only): a valid binary passes; a non-Mach-O cannot be signed and is refused; a
-#      wrong-architecture binary is refused. Uses the real codesign/lipo, so it is Darwin-only and skips elsewhere.
+#   2. esd_verify_binary (macOS only): a valid binary passes; a non-Mach-O is refused (it ad-hoc signs on current
+#      macOS but fails the arch check); a wrong-architecture binary is refused. Uses the real codesign/lipo, so it
+#      is Darwin-only and skips elsewhere.
 #   3. the abort path (macOS only): install.sh's own writer block, evaluated on a bad binary, exits non-zero, does
 #      NOT run reload.sh (the daemons are not restarted), keeps the previously installed binary live, and leaves no
 #      staging copy. A good binary is the positive control: it installs and reaches reload.
@@ -47,7 +48,7 @@ else
 
   echo "-- esd_verify_binary: sign + codesign --verify --strict + architecture, on real binaries"
   printf 'not a mach-o binary\n' > "$T/text"
-  ok "a non-Mach-O cannot be signed and is refused" '! out="$(esd_verify_binary "$T/text" 2>&1)" && printf %s "$out" | grep -q sign'
+  ok "a non-Mach-O is refused" '! esd_verify_binary "$T/text" >/dev/null 2>&1'
   if [ "$have_good" = 1 ]; then
     cp "$T/good" "$T/good1"
     ok "a valid host-arch binary passes" 'esd_verify_binary "$T/good1" >/dev/null 2>&1'
@@ -61,7 +62,7 @@ else
   # install.sh has backed up the previously installed one at $PREVBIN. A reload.sh that only records being run
   # stands in for the real restart, so the test can tell whether the daemons would have been restarted.
   SRC="$T/nsrc"; BASE="$T/nbase"; mkdir -p "$SRC/build" "$BASE"
-  printf 'BAD-NEW\n' > "$SRC/build/ESDaemon"; chmod 755 "$SRC/build/ESDaemon"   # non-Mach-O: signing fails
+  printf 'BAD-NEW\n' > "$SRC/build/ESDaemon"; chmod 755 "$SRC/build/ESDaemon"   # non-Mach-O: refused (fails the arch check)
   STAGED="$BASE/.ESDaemon.staged.$$"; PREVBIN="$BASE/.ESDaemon.prev.$$"
   printf 'OLD-GOOD\n' > "$BASE/ESDaemon"; printf 'OLD-GOOD\n' > "$PREVBIN"
   SENT="$T/nreload.ran"; printf '#!/bin/bash\ntouch %q\n' "$SENT" > "$BASE/reload.sh"; chmod +x "$BASE/reload.sh"
