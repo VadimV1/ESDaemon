@@ -12,7 +12,7 @@ if [ -z "$RENDER" ]; then
   . "$HERE/chain.sh"; esd_gate "$BASE" reload.sh || exit 1
 fi
 # bash-invoked: a GitHub tarball/ZIP (or a Windows push) may drop the execute bit on cfg.sh
-bash "$HERE/cfg.sh" "$CFGF" json >/dev/null || { echo "ESDaemon.cfg is invalid, nothing changed"; exit 1; }
+CFG="$(bash "$HERE/cfg.sh" "$CFGF" json)" || { echo "ESDaemon.cfg is invalid, nothing changed"; exit 1; }
 EVENTS="$(bash "$HERE/cfg.sh" "$CFGF" events)"; [ -n "$EVENTS" ] || EVENTS="exec"
 SUB="$(bash "$HERE/cfg.sh" "$CFGF" get subsystem)"; CAT="$(bash "$HERE/cfg.sh" "$CFGF" get category)"
 
@@ -41,6 +41,12 @@ cat > "$T/com.esdaemon.filter.plist" <<P
 P
 if command -v plutil >/dev/null; then plutil -lint -s "$T"/*.plist || { echo "generated plist is invalid, nothing changed"; exit 1; }; fi
 if [ -n "$RENDER" ]; then cp "$T"/*.plist "$RENDER/"; exit 0; fi
+
+# The filter restarts below with this cfg. On a jq that cannot run it, it would restart every few seconds and collect
+# nothing, where the one running now may still work: check first, on this Mac's jq (macOS updates replace it), with the
+# scope.jq the filter runs ($BASE, filter.sh), wherever this script is run from.
+# shellcheck source=bin/jqcheck.sh
+. "$HERE/jqcheck.sh"; esd_jq_check "$BASE/scope.jq" "$CFG" reload.sh || exit 1
 
 # Apple's com.apple.eslogger.plist enables 32 KB messages for category "events" only; any other subsystem or
 # category gets the ~1 KB default, which cuts almost every record into invalid JSON. Enable it for ours.

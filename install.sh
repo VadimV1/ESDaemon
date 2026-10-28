@@ -19,7 +19,13 @@ if [ "$CFGF" = "$BASE/configs/ESDaemon.cfg" ] && grep -Eq '^[[:space:]]*(\[(alwa
   CFGF="$MIG"
 fi
 # bash-invoked: a GitHub tarball/ZIP (or a Windows push) may drop the execute bit on the source scripts
-bash "$SRC/bin/cfg.sh" "$CFGF" json >/dev/null || { echo "$CFGF is invalid for this version: fix it and re-run install.sh (nothing changed)"; exit 1; }
+CFG="$(bash "$SRC/bin/cfg.sh" "$CFGF" json)" || { echo "$CFGF is invalid for this version: fix it and re-run install.sh (nothing changed)"; exit 1; }
+# check that this Mac's jq runs THIS version's filter with that cfg too (bin/jqcheck.sh): otherwise the filter daemon
+# is the first to compile it, and on a jq that cannot, it restarts every few seconds and collects nothing
+# shellcheck source=bin/jqcheck.sh
+. "$SRC/bin/jqcheck.sh"
+esd_jq_check "$SRC/src/scope.jq" "$CFG" install.sh \
+  || { [ -z "$MIG" ] || echo "The config it ran with: $BASE/configs/ESDaemon.cfg, migrated to this version (migrated draft: $MIG)." >&2; exit 1; }
 
 # retire the old unfiltered daemon, it would flood the same subsystem
 if [ -f $LD/com.endpoint.eslogger.plist ]; then launchctl bootout system $LD/com.endpoint.eslogger.plist 2>/dev/null || true; mv $LD/com.endpoint.eslogger.plist $LD/com.endpoint.eslogger.plist.disabled; fi
@@ -33,7 +39,7 @@ if [ -f $LD/com.endpoint.eslogger.plist ]; then launchctl bootout system $LD/com
 install_files() {
   local src="$1" base="$2" bin="$3" uid="${4:-0}" gid="${5:-0}" d
   for d in "$base" "$base/bin" "$base/configs"; do [ -d "$d" ] || install -d -o "$uid" -g "$gid" -m 755 "$d"; done
-  install -o "$uid" -g "$gid" -m 755 "$src"/bin/{chain.sh,cfg.sh,filter.sh,measure.sh,reload.sh,try.sh,update.sh} "$base/"
+  install -o "$uid" -g "$gid" -m 755 "$src"/bin/{chain.sh,cfg.sh,filter.sh,jqcheck.sh,measure.sh,reload.sh,try.sh,update.sh} "$base/"
   install -o "$uid" -g "$gid" -m 755 "$src/bin/esdaemon" "$base/bin/"   # the control command (status/reload/update/uninstall)
   if BINWHY="$(esd_root_only "$bin" "$uid" "${6:-/}")"; then
     CMD=esdaemon
