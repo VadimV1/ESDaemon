@@ -28,7 +28,11 @@ ok "no RuleName / rule field"            '[ "$(ev /bin/zsh /bin/ls "[\"ls\"]" | 
 ok "Bindplane agent log show excluded by default" '[ "$(ev /opt/observiq-otel-collector/observiq-otel-collector /usr/bin/log "[\"log\",\"show\"]" | n)" = 0 ]'
 ok "Bindplane agent itself excluded by default"   '[ "$(ev /sbin/launchd /opt/observiq-otel-collector/observiq-otel-collector "[\"x\"]" X false | n)" = 0 ]'
 
-ok "eslogger itself excluded by default"          '[ "$(ev /bin/bash /usr/bin/eslogger "[\"/usr/bin/eslogger\",\"--list-events\"]" | n)" = 0 ]'
+# eslogger: ESDaemon's own daemon runs /usr/bin/eslogger started by launchd; a manual run from a shell is a recon
+# signal and stays logged. Pinned on the launchd-start determination (ParentImage), never argv (the daemon uses
+# `eslogger exec ...`, a hand run might be `eslogger --list-events` — the command line cannot tell them apart safely).
+ok "eslogger daemon started by launchd excluded by default"  '[ "$(S /usr/bin/eslogger 1 1 | n)" = 0 ]'
+ok "manual eslogger run from a shell (root) logged"          '[ "$(S /usr/bin/eslogger 4100 4100 true /bin/zsh | n)" = 1 ]'
 ok "eslogger copied elsewhere still logged"       '[ "$(ev /bin/zsh /tmp/eslogger "[\"/tmp/eslogger\",\"exec\"]" | n)" = 1 ]'
 
 # ls <signing id> <image> <args json>: launched by launchd, Apple platform binary
@@ -221,6 +225,10 @@ UNSEEN=$( { J 903 902 900 /usr/bin/awk '["awk","-v","k=subsystem"]'
             J 904 902 900 /usr/bin/jq '["jq","-n","-cR"]'
             J 905 77 999 /usr/bin/curl '["curl","y"]'; } | jq -n -cR --argjson cfg "$SP" -f "$ROOT/src/scope.jq")
 ok "job start never seen (eslogger restarting): helpers dropped by self_pid" '[ "$(echo "$UNSEEN" | jq -r .Image | tr "\n" " ")" = "/usr/bin/curl " ]'
+# the filter runs cfg.sh -> `eslogger --list-events` on every start; its responsible process is the filter job, so
+# self_pid drops it, not the default eslogger rule (whose ParentImage is /sbin/launchd clause does not match here).
+ok "filter job's own eslogger --list-events dropped by self_pid, not the cfg rule" \
+   '[ "$(J 906 902 900 /usr/bin/eslogger "[\"eslogger\",\"--list-events\"]" | n "$SP")" = 0 ]'
 ok "user running bash /usr/local/ESDaemon/try.sh is logged (not the launchd job)" \
    '[ "$(J 700 650 640 /bin/bash "[\"/bin/bash\",\"/usr/local/ESDaemon/try.sh\"]" | n)" = 1 ]'
 ok "user process cannot claim the job by pid reuse (pidversion differs)" \
