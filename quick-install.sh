@@ -102,7 +102,7 @@ for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
   FOUND="$(/usr/bin/log show --last 30s --predicate 'subsystem == "com.apple.eslogger"' --style ndjson 2>/dev/null || true)"
   if [[ "$FOUND" == *"$MARK"* ]]; then
     say "events are flowing to the unified log (subsystem com.apple.eslogger)"
-    echo "    watch:  log stream --info --predicate 'subsystem == \"com.apple.eslogger\" AND process == \"ESDaemon\"'"
+    echo "    watch:  log stream --info --predicate 'subsystem == \"com.apple.eslogger\" AND process == \"ESDaemon\" AND userIdentifier == 0'"
     echo "    config: /usr/local/ESDaemon/configs/ESDaemon.cfg  (apply edits: sudo /usr/local/ESDaemon/reload.sh)"
     exit 0
   fi

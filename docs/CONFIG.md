@@ -37,7 +37,7 @@ sudo /usr/local/ESDaemon/reload.sh                        # 4. apply (refuses an
 
 | Key | Values | Default |
 |---|---|---|
-| `subsystem` / `category` | unified-log destination | `com.apple.eslogger` / `events` (eslogger's own, so the Bindplane predicate stays the same) |
+| `subsystem` / `category` | unified-log destination | `com.apple.eslogger` / `events` (eslogger's own, so the Bindplane predicate's subsystem and category stay the same; it also requires `userIdentifier == 0`, the root writer) |
 | `format` | `sysmon`, `sysmon+extras`, `slim`, `raw` | `sysmon+extras` in the shipped cfg. If the key is missing: `slim` (a legacy `slim = false` means `raw`) |
 | `parent_cmdline_max` | characters of `ParentCommandLine` written per event (`0` = no cap). The parent's command line is repeated in every child event, so one long parent inflates all its children; the cut value ends with `…[+N chars]`. `CommandLine` is only cut to fit `record_max`. Rules match the full parent command line. | `256` |
 | `args_max` | most `argv` elements rendered into `CommandLine` (`0` = no software cap, but still clamped by the ceiling below). `argv` is attacker-controlled and can hold hundreds of thousands of entries; rendering them all stalls the single-threaded filter for seconds and makes macOS drop events, so beyond this count the line is cut with a `…[+N args]` marker. Normal commands have far fewer. | `4096` |

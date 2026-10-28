@@ -80,7 +80,7 @@ case "$cmd" in
     ;;
 
   logs)
-    exec "$LOGBIN" stream --info --predicate 'subsystem == "com.apple.eslogger" AND process == "ESDaemon"'
+    exec "$LOGBIN" stream --info --predicate 'subsystem == "com.apple.eslogger" AND process == "ESDaemon" AND userIdentifier == 0'
     ;;
 
   config)

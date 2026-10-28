@@ -53,7 +53,7 @@ curl -fsSL https://raw.githubusercontent.com/VadimV1/ESDaemon/main/quick-install
 Then give `/usr/bin/eslogger` **Full Disk Access** (System Settings → Privacy & Security → Full Disk Access, or the MDM profile in [`mdm/`](mdm/)), and watch events arrive:
 
 ```bash
-log stream --info --predicate 'subsystem == "com.apple.eslogger" AND process == "ESDaemon"'
+log stream --info --predicate 'subsystem == "com.apple.eslogger" AND process == "ESDaemon" AND userIdentifier == 0'
 ```
 
 Once installed, everything is done through the `esdaemon` command (no scripts to keep around):
