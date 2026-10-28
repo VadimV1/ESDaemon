@@ -36,6 +36,7 @@ ok "format wrong case"                   'bad "[settings]\nformat = Sysmon\n"'
 ok "third_party typo drop-noisy"         'bad "[settings]\nthird_party = drop-noisy\n"'
 ok "slim not true/false"                 'bad "[settings]\nslim = no\n"'
 ok "old events = setting refused"        'bad "[settings]\nevents = exec\n"'
+ok "heartbeat removed: now unknown setting" 'bad "[settings]\nheartbeat = 300\n" && { "$ROOT/bin/cfg.sh" $T/b.cfg json 2>&1 || true; } | grep -q "unknown setting"'
 ok "unknown module object refused"       'bad "[modules]\nfiles = read\n"'
 ok "unknown module operation refused"    'bad "[modules]\nfile = reed\n"'
 ok "module XML injection refused"        'bad "[modules]\nfile = read</string><string>-h\n"'
@@ -48,15 +49,6 @@ ok "Team ID malformed"                   'bad "[noisy_team_ids]\nubf8t346g9\n"'
 ok "prefix /"                            'bad "[noisy_path_prefixes]\n/\n"'
 ok "prefix relative"                     'bad "[noisy_path_prefixes]\nopt/foo/\n"'
 ok "get refuses an invalid file too"     'bad "[alwyas]\ncurl\n" &&! "$ROOT/bin/cfg.sh" $T/b.cfg get subsystem >/dev/null 2>&1'
-echo "-- heartbeat: whole seconds, at most a day, 0 = off"
-ok "default cfg: heartbeat = 300"         '[ "$("$ROOT/bin/cfg.sh" "$ROOT/configs/ESDaemon.cfg" get heartbeat)" = 300 ]'
-hb(){ printf '[settings]\nheartbeat = %s\n' "$1" > $T/hb.cfg; "$ROOT/bin/cfg.sh" $T/hb.cfg json >/dev/null 2>&1 && [ "$("$ROOT/bin/cfg.sh" $T/hb.cfg get heartbeat)" = "$1" ]; }
-ok "heartbeat 0 (off), 1 and 86400 accepted" 'hb 0 && hb 1 && hb 86400'
-ok "heartbeat empty accepted (the default)" 'hb ""'
-# refused for its value, by the value's own message: an unknown key would be refused too, with another one
-hbbad(){ bad "[settings]\nheartbeat = $1\n" && { "$ROOT/bin/cfg.sh" $T/b.cfg json 2>&1 || true; } | grep -q "heartbeat must be a whole number of seconds"; }
-ok "heartbeat 5m, -1, 1.5, off refused"   'hbbad 5m && hbbad -1 && hbbad 1.5 && hbbad off'
-ok "heartbeat over a day refused (86401; 300000 = milliseconds meant)" 'hbbad 86401 && hbbad 300000'
 echo "-- end to end: a CRLF cfg still logs curl"
 EV='{"process":{"executable":{"path":"/bin/zsh"},"is_platform_binary":true,"audit_token":{"pid":7}},"event":{"exec":{"target":{"executable":{"path":"/usr/bin/curl"},"is_platform_binary":true,"audit_token":{"pid":8},"ppid":7},"args":["curl","-s","https://x/a"]}}}'
 ok "curl kept with CRLF cfg"             '[ "$(echo "$EV" | jq -n -cR --argjson cfg "$(J $T/crlf.cfg)" -f "$ROOT/src/scope.jq" | grep -c /usr/bin/curl)" = 1 ]'

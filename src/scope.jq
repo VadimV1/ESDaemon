@@ -180,7 +180,8 @@ def field_order:
 # differs from ParentProcessId. EventType stays beside EventID (readable name for the number).
 # GlobalSeqNum (sysmon+extras): EndpointSecurity's number for the event, the global_seq_num slim and raw keep. It puts
 # one eslogger run's records in order and tells a repeated record from a new one. It is no loss counter: events the
-# filter leaves out use up numbers too, so records skip numbers all the time (the heartbeat's count shows loss).
+# filter leaves out use up numbers too, so records skip numbers all the time (loss shows as an eslogger_scoped_gap,
+# or at the collector).
 def sysmon($ev):
   .time as $t | .process as $p | event_kind($ev) as $kind |
   { EventID: $kind[1], EventType: $kind[0], UtcTime: ($t | sysmon_time),

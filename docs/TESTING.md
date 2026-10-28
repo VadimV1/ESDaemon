@@ -27,8 +27,7 @@ Use a test Mac. Each step checks one thing; together they take about 15 minutes.
 6. **Detection-relevant activity is logged.** `osascript -e 'do shell script "id"'`, `security find-generic-password -s x`, `xattr -d com.apple.quarantine <file>`, and a plist written to `~/Library/LaunchAgents` must each appear.
 7. **ESDaemon does not log itself.** `sudo launchctl kickstart -k system/com.esdaemon.filter`, wait 30 seconds, and check that no record names `/usr/local/ESDaemon/` (a manual `sudo reload.sh` is logged by design).
 8. **Recovery.** `sudo launchctl kill SIGKILL system/com.esdaemon.filter`: the filter restarts and nothing is lost. `sudo launchctl kill SIGKILL system/com.esdaemon.eslogger`: both restart, an `eslogger_scoped_restart` record appears, and the records after it start again from a low `GlobalSeqNum`. Reboot: events resume without any action.
-9. **Heartbeat.** Five minutes after the filter starts, `log show --last 6m --predicate 'subsystem == "com.apple.eslogger" AND process == "ESDaemon"' --style ndjson | grep eslogger_scoped_heartbeat` shows a heartbeat, then one every 5 minutes. After `sudo launchctl bootout system/com.esdaemon.filter` none follow; `sudo esdaemon reload` brings them back ([CONFIG.md](CONFIG.md#heartbeat)).
-10. **Volume.** `sudo /usr/local/ESDaemon/measure.sh 600` during normal use, and compare with [DEFAULT-CONFIG.md](DEFAULT-CONFIG.md#measured-impact).
-11. **Collector.** Confirm the records arrive in your SIEM exactly once: no two from the Mac with the same `GlobalSeqNum` and `UtcTime` ([GETTING-STARTED.md](GETTING-STARTED.md#5-ship-the-events-to-your-siem)).
+9. **Volume.** `sudo /usr/local/ESDaemon/measure.sh 600` during normal use, and compare with [DEFAULT-CONFIG.md](DEFAULT-CONFIG.md#measured-impact).
+10. **Collector.** Confirm the records arrive in your SIEM exactly once: no two from the Mac with the same `GlobalSeqNum` and `UtcTime` ([GETTING-STARTED.md](GETTING-STARTED.md#5-ship-the-events-to-your-siem)).
 
 Stopping your own `eslogger` captures: a backgrounded `eslogger` ignores SIGINT, so stop it with `kill -TERM <pid>`; `pkill eslogger` would also kill ESDaemon's.
