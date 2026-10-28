@@ -32,7 +32,7 @@ case "${1:-}" in
   ""|--check|--install) ;;
   *) die "usage: update.sh [--check | --install | --version]" ;;
 esac
-[ -n "$REPO" ] && [ "$REPO" != "OWNER/ESDaemon" ] || die "repository not set: put owner/repo in $RFILE or set ESDAEMON_REPO"
+[ -n "$REPO" ] && [ "$REPO" != "OWNER/ESDaemon" ] || die "repository not set: put owner/repo in ${RFILE:-$HERE/REPO} or set ESDAEMON_REPO"
 
 if [ -n "${ESDAEMON_RELEASE_JSON:-}" ]; then JSON="$(cat "$ESDAEMON_RELEASE_JSON")"
 else JSON="$(curl -fsSL -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$REPO/releases/latest")" \

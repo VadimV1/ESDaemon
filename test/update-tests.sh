@@ -22,6 +22,8 @@ rel v0.1.0; ok "--version prints the installed version"  '[ "$(echo 0.1.0 > "$T/
 printf '{"message":"Not Found"}' > "$T/rel.json"; ok "no release -> error (1)" '[ "$(run 0.1.0)" = 1 ] && grep -q "no release found" "$T/out"'
 echo "OWNER/ESDaemon" > "$T/inst/REPO"; rel v0.2.0; ok "placeholder repo -> clear error" '[ "$(run 0.1.0)" = 1 ] && grep -q "repository not set" "$T/out"'
 echo "acme/ESDaemon" > "$T/inst/REPO"
+mkdir -p "$T/bare"; cp "$ROOT/bin/update.sh" "$T/bare/"; rel v0.2.0
+ok "no VERSION/REPO beside it, no ESDAEMON_REPO -> repository not set (1)" '[ "$(ESDAEMON_REPO= ESDAEMON_RELEASE_JSON="$T/rel.json" bash "$T/bare/update.sh" --check >"$T/out" 2>&1; echo $?)" = 1 ] && grep -q "repository not set" "$T/out" && grep -q "/REPO" "$T/out" && ! grep -q "unbound variable" "$T/out"'
 ok "unknown option refused"                               '! bash "$T/inst/update.sh" --bogus >/dev/null 2>&1'
 ok "repo VERSION file is x.y.z"                           'grep -Eq "^[0-9]+\.[0-9]+\.[0-9]+$" "$ROOT/VERSION"'
 
