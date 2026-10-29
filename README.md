@@ -48,6 +48,14 @@ or without cloning:
 curl -fsSL https://raw.githubusercontent.com/VadimV1/ESDaemon/main/quick-install.sh | sudo bash
 ```
 
+**Deploy with MDM (`.pkg`).** For a managed fleet, download `ESDaemon-<version>.pkg` from the [releases page](https://github.com/VadimV1/ESDaemon/releases) and push it with your MDM (Jamf, Kandji, Intune) — which deploys `.pkg`s, not `curl … | sudo bash` — or install one Mac by hand:
+
+```bash
+sudo installer -pkg ESDaemon-<version>.pkg -target /
+```
+
+The package runs the same `install.sh` as the commands above, so it installs to the same place, keeps a tuned config, and `sudo esdaemon reload` / `sudo esdaemon uninstall` work identically. Pair it with the Full Disk Access profile in [`mdm/`](mdm/) for a one-push deployment. The `.pkg` is **unsigned** today — fine for MDM, which is the trust anchor on managed devices; see [Supply chain trust model](SECURITY.md#supply-chain-trust-model).
+
 > **Trust model — before deploying to a fleet:** this installs and updates as **root** from this repository, tracking `main`, with the binary checksum-verified for transit only, not authenticity. See [Supply chain trust model](SECURITY.md#supply-chain-trust-model).
 
 Then give `/usr/bin/eslogger` **Full Disk Access** (System Settings → Privacy & Security → Full Disk Access, or the MDM profile in [`mdm/`](mdm/)), and watch events arrive:

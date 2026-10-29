@@ -68,7 +68,7 @@ mk_tree(){ # $1 = tree dir
 }
 unrun(){ local d="$1"; shift
   ESDAEMON_BASE="$d/base" ESDAEMON_LD="$d/ld" ESDAEMON_LOGS="$d/logs" ESDAEMON_SELF="$d/bin/esdaemon" \
-  ESDAEMON_LAUNCHCTL="$d/lc" ESDAEMON_LOG=/bin/true ESDAEMON_NEWSYSLOG="$d/conf" bash "$d/bin/esdaemon" "$@"; }
+  ESDAEMON_LAUNCHCTL="$d/lc" ESDAEMON_LOG=/bin/true ESDAEMON_NEWSYSLOG="$d/conf" ESDAEMON_PKGUTIL=/bin/true bash "$d/bin/esdaemon" "$@"; }
 
 U="$TD/u1"; mk_tree "$U"; unrun "$U" uninstall >/dev/null 2>&1
 ok "removed the rotation config (no --purge)" '[ ! -e "$U/conf" ]'

@@ -36,13 +36,27 @@ jobs:
           codesign -s - -f build/ESDaemon-macos-universal
           lipo -info build/ESDaemon-macos-universal
           (cd build && shasum -a 256 ESDaemon-macos-universal > ESDaemon-macos-universal.sha256)
+      - name: installer package (.pkg)
+        # The .pkg wraps install.sh for MDM (Jamf / Kandji / Intune). Put the universal binary at build/ESDaemon,
+        # where mkpkg.sh bundles it, so the Mac needs no toolchain; then build and checksum the package. Unsigned
+        # today — fine for MDM; Developer ID Installer signing + notarization is the planned step (see SECURITY.md).
+        run: |
+          cp build/ESDaemon-macos-universal build/ESDaemon
+          make pkg
+          ver="$(tr -d ' \r\n' < VERSION)"
+          (cd build && shasum -a 256 "ESDaemon-$ver.pkg" > "ESDaemon-$ver.pkg.sha256")
       - name: publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # a release made on the website already exists for this tag: add the binary to it; otherwise create one
+          ver="$(tr -d ' \r\n' < VERSION)"
+          # a release made on the website already exists for this tag: add the assets to it; otherwise create one
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber build/ESDaemon-macos-universal build/ESDaemon-macos-universal.sha256
+            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber \
+              build/ESDaemon-macos-universal build/ESDaemon-macos-universal.sha256 \
+              "build/ESDaemon-$ver.pkg" "build/ESDaemon-$ver.pkg.sha256"
           else
-            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes build/ESDaemon-macos-universal build/ESDaemon-macos-universal.sha256
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes \
+              build/ESDaemon-macos-universal build/ESDaemon-macos-universal.sha256 \
+              "build/ESDaemon-$ver.pkg" "build/ESDaemon-$ver.pkg.sha256"
           fi

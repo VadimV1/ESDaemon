@@ -23,6 +23,7 @@ SELF="${ESDAEMON_SELF:-/usr/local/bin/esdaemon}"
 LAUNCHCTL="${ESDAEMON_LAUNCHCTL:-launchctl}"
 LOGBIN="${ESDAEMON_LOG:-/usr/bin/log}"
 NEWSYSLOG="${ESDAEMON_NEWSYSLOG:-/etc/newsyslog.d/com.esdaemon.conf}"   # stderr-rotation config (issue #9)
+PKGUTIL="${ESDAEMON_PKGUTIL:-pkgutil}"   # forgets a .pkg install's receipt on uninstall; a script install has none
 
 # Real actions on the real install require root. A test pointed at a throwaway BASE does not.
 need_root() {
@@ -105,6 +106,7 @@ case "$cmd" in
         && echo "config saved to $LOGS/ESDaemon.cfg.uninstalled"
     fi
     rm -rf "$BASE" /var/run/ESDaemon
+    "$PKGUTIL" --forget com.esdaemon.pkg 2>/dev/null || true   # drop a .pkg install's receipt; a script install has none (no-op)
     [ $purge = 1 ] && rm -rf "$LOGS" && echo "removed $LOGS"
     # the command on PATH last, if the install put it there (the copy in $BASE went with it). Deleting the script that
     # is running is safe: bash keeps reading the file it has open.
