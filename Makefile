@@ -1,4 +1,4 @@
-.PHONY: test lint build install uninstall clean
+.PHONY: test lint build pkg install uninstall clean
 SHELL_FILES := install.sh uninstall.sh quick-install.sh bin/esdaemon bin/*.sh test/*.sh redteam/*.sh
 
 test:            ## filter logic tests (needs jq) — runs on Linux or macOS
@@ -20,6 +20,9 @@ lint:            ## shell syntax + shellcheck (if installed) + cfg parses + scri
 
 build:           ## compile ESDaemon (macOS, needs Xcode CLT)
 	@mkdir -p build && swiftc -O -o build/ESDaemon src/ESDaemon.swift && codesign -s - -f build/ESDaemon && echo "build/ESDaemon ok"
+
+pkg:             ## build the macOS installer .pkg (macOS, needs pkgbuild; uses build/ESDaemon, builds it if missing)
+	./bin/mkpkg.sh
 
 install: build   ## install on this Mac (root)
 	sudo ./install.sh

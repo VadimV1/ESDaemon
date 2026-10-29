@@ -16,12 +16,16 @@ ok(){ if eval "$2"; then pass=$((pass+1)); echo "  ok   $1"; else fail=$((fail+1
 # minus the files that are only ever *sourced* (never executed standalone) and so inherit their caller's pinned PATH:
 #   bin/chain.sh, bin/jqcheck.sh  (sourced by install.sh / reload.sh / esdaemon, all pinned below)
 #   redteam/lib.sh, redteam/scenarios.sh  (sourced by redteam/run.sh, pinned below)
-# test/*.sh are developer harnesses, not root entry points, so they are out of scope.
+# test/*.sh are developer harnesses, not root entry points, so they are out of scope — and so is bin/mkpkg.sh, a
+# build tool a developer / CI runs as a normal user (never as root) to make the .pkg: it may use the caller's PATH
+# to reach the Swift toolchain / pkgbuild, so the root-PATH-pin rule does not apply (the postinstall it generates,
+# which DOES run as root, pins PATH like the install scripts).
 SOURCED_ONLY=" bin/chain.sh bin/jqcheck.sh redteam/lib.sh redteam/scenarios.sh "
+BUILD_TOOLS=" bin/mkpkg.sh "
 candidates=()
 for f in install.sh uninstall.sh quick-install.sh bin/esdaemon bin/*.sh redteam/*.sh; do
   [ -f "$f" ] || continue
-  case "$SOURCED_ONLY" in *" $f "*) continue ;; esac
+  case "$SOURCED_ONLY$BUILD_TOOLS" in *" $f "*) continue ;; esac
   candidates+=("$f")
 done
 

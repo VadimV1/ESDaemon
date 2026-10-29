@@ -23,7 +23,7 @@ new_tree(){
 }
 run(){ ESDAEMON_BASE="$T/base" ESDAEMON_LD="$T/ld" ESDAEMON_LOGS="$T/logs" \
        ESDAEMON_SELF="${SELF:-$T/bin/esdaemon}" ESDAEMON_LAUNCHCTL="$T/lc" ESDAEMON_LOG=/bin/true \
-       ESDAEMON_NEWSYSLOG="$T/newsyslog.conf" \
+       ESDAEMON_NEWSYSLOG="$T/newsyslog.conf" ESDAEMON_PKGUTIL=/bin/true \
        bash "$T/bin/esdaemon" "$@"; }
 
 echo "-- usage and exit codes"

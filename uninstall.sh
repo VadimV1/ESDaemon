@@ -26,5 +26,6 @@ if [ $PURGE = 0 ] && [ -f "$BASE/configs/ESDaemon.cfg" ]; then
     && echo "config saved to $LOGS/ESDaemon.cfg.uninstalled"
 fi
 rm -rf "$BASE" /var/run/ESDaemon /usr/local/bin/esdaemon
+pkgutil --forget com.esdaemon.pkg 2>/dev/null || true   # drop a .pkg install's receipt; a script install has none (no-op)
 [ $PURGE = 1 ] && rm -rf "$LOGS" && echo "removed $LOGS"
 echo "ESDaemon removed. Full Disk Access for /usr/bin/eslogger can be revoked in System Settings (or by removing the MDM profile)."
