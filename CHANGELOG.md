@@ -2,7 +2,7 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.1] — 2026-10-29
 
 ### Added
 - **macOS installer package (`.pkg`) for MDM.** Each release now also ships `ESDaemon-<version>.pkg` (and its `.sha256`), so a fleet can deploy ESDaemon with an MDM (Jamf, Kandji, Intune) — which pushes `.pkg`s, not `curl … | sudo bash` — or install one Mac by hand with `sudo installer -pkg ESDaemon-<version>.pkg -target /`. The package is a thin wrapper around `install.sh`: its payload stages the install sources under an opaque directory and its `postinstall` runs the unchanged `install.sh` and removes the staging directory, so a `.pkg` install is byte-for-byte the same as a script install — it keeps a tuned config, ad-hoc signs and verifies the binary and checks its architecture, and loads both LaunchDaemons — and `esdaemon reload` / `uninstall` behave identically (uninstall also `pkgutil --forget`s the `com.esdaemon.pkg` receipt). Built with `bin/mkpkg.sh` (`make pkg`); it bundles the prebuilt universal binary, so the target Mac needs no Swift toolchain. The `.pkg` is unsigned today (fine for MDM, the trust anchor on managed devices); Developer ID Installer signing and notarization, for which `mkpkg.sh` already has a hook (`ESDAEMON_PKG_SIGN_ID`), is the planned step for manual installs. See [README](README.md) / [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) and [SECURITY.md](SECURITY.md#the-pkg-installer-mdm).
