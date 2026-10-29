@@ -19,14 +19,14 @@ From a clean Mac to ESDaemon events in your SIEM. About 10 minutes for one Mac.
 From a checkout:
 
 ```bash
-git clone https://github.com/<owner>/ESDaemon.git && cd ESDaemon
+git clone https://github.com/VadimV1/ESDaemon.git && cd ESDaemon
 sudo ./quick-install.sh
 ```
 
 Without a checkout:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<owner>/ESDaemon/main/quick-install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/VadimV1/ESDaemon/main/quick-install.sh | sudo bash
 ```
 
 > **Trust model — before deploying to a fleet:** this installs and updates as **root** from this repository, tracking `main`, with the binary checksum-verified for transit only, not authenticity. See [Supply chain trust model](../SECURITY.md#supply-chain-trust-model).
@@ -126,7 +126,7 @@ sudo esdaemon uninstall            # keeps a copy of your config in /var/log/ESD
 sudo esdaemon uninstall --purge    # removes that too
 ```
 
-The `esdaemon` command removes everything it installed, itself included — nothing is left on disk and there is no separate script to download or keep. (A checkout can still use `sudo ./uninstall.sh`, or `curl -fsSL https://raw.githubusercontent.com/<owner>/ESDaemon/main/uninstall.sh | sudo bash`. Both remove the same things without running the installed command or anything else from `/usr/local/ESDaemon`: use them when `esdaemon status` says UNSAFE.) Revoke eslogger's Full Disk Access in System Settings, or remove the MDM profile.
+The `esdaemon` command removes everything it installed, itself included — nothing is left on disk and there is no separate script to download or keep. (A checkout can still use `sudo ./uninstall.sh`, or `curl -fsSL https://raw.githubusercontent.com/VadimV1/ESDaemon/main/uninstall.sh | sudo bash`. Both remove the same things without running the installed command or anything else from `/usr/local/ESDaemon`: use them when `esdaemon status` says UNSAFE.) Revoke eslogger's Full Disk Access in System Settings, or remove the MDM profile.
 
 ## Troubleshooting
 
